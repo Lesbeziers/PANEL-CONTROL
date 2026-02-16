@@ -1,1 +1,249 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panel de control M+ - MonthBlockGrid</title>
+    <style>
+      :root {
+        --header-bg: #5e5e5e;
+        --header-text: #f2f2f2;
+        --grid-border: #585858;
+        --group-bg: #2f5f98;
+        --group-text: #ffffff;
+        --cell-bg: #efefef;
+        --inactive-bg: #d5d5d5;
+        --inactive-text: #959595;
+        --row-height: 30px;
+        --header-height: 38px;
+        --day-width: 28px;
+      }
 
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 20px;
+        font-family: Arial, Helvetica, sans-serif;
+        background: #ffffff;
+        color: #111;
+      }
+
+      .month-block {
+        border: 1px solid var(--grid-border);
+        width: 100%;
+        max-width: 1560px;
+        background: var(--cell-bg);
+      }
+
+      .month-block__header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: grid;
+        grid-template-columns: 930px 1fr;
+        background: var(--header-bg);
+      }
+
+      .month-block__body {
+        height: 320px;
+        overflow-y: auto;
+      }
+
+      .month-block__body-grid {
+        display: grid;
+        grid-template-columns: 930px 1fr;
+      }
+
+      .left-grid,
+      .left-row,
+      .left-header {
+        display: grid;
+        grid-template-columns: 46px 64px 142px 320px 82px 82px 120px 74px;
+      }
+
+      .left-header > div,
+      .right-header-track .day-cell,
+      .left-row > div,
+      .day-row .day-cell {
+        border-right: 1px solid var(--grid-border);
+        border-bottom: 1px solid var(--grid-border);
+        font-size: 12px;
+      }
+
+      .left-header > div,
+      .right-header-track .day-cell {
+        height: var(--header-height);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-weight: 700;
+        color: var(--header-text);
+      }
+
+      .left-header > div {
+        background: var(--header-bg);
+      }
+
+      .left-row > div,
+      .day-row .day-cell {
+        height: var(--row-height);
+        background: var(--cell-bg);
+      }
+
+      .left-row > div {
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .left-row.group > div,
+      .day-row.group .day-cell {
+        background: var(--group-bg);
+        color: var(--group-text);
+      }
+
+      .left-row .gutter {
+        justify-content: center;
+        gap: 8px;
+        font-weight: 700;
+        padding: 0;
+      }
+
+      .right-header-scroll,
+      .right-body-scroll {
+        overflow-x: auto;
+      }
+
+      .right-header-scroll {
+        overflow-y: hidden;
+        background: var(--header-bg);
+      }
+
+      .right-header-track,
+      .day-row {
+        display: grid;
+        grid-template-columns: repeat(31, var(--day-width));
+        width: calc(31 * var(--day-width));
+      }
+
+      .right-header-track .day-cell {
+        background: var(--header-bg);
+      }
+
+      .right-header-track .day-cell.inactive {
+        background: #777;
+        color: #bcbcbc;
+      }
+
+      .day-row .day-cell.inactive {
+        background: #e2e2e2;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app"></main>
+
+    <script>
+      const headers = ["", "LISTO", "TIPO", "TÍTULO", "INICIO VIG", "FIN VIG", "GÉNERO", "ID"];
+      const rows = [
+        {
+          group: true,
+          cells: ["+", "", "PROMO 20", "MÁXIMO 5 SIMULTÁNEAS", "", "", "", ""],
+        },
+        ...Array.from({ length: 9 }, () => ({
+          group: false,
+          cells: ["-", "", "", "", "", "", "", ""],
+        })),
+      ];
+
+      function renderMonthBlockGrid(root) {
+        root.innerHTML = `
+          <section class="month-block" aria-label="MonthBlockGrid Febrero 2026">
+            <div class="month-block__header">
+              <div class="left-header" id="left-header"></div>
+              <div class="right-header-scroll" id="right-header-scroll">
+                <div class="right-header-track" id="right-header-track"></div>
+              </div>
+            </div>
+            <div class="month-block__body">
+              <div class="month-block__body-grid">
+                <div class="left-grid" id="left-body"></div>
+                <div class="right-body-scroll" id="right-body-scroll">
+                  <div id="right-body"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        `;
+
+        const leftHeader = root.querySelector("#left-header");
+        headers.forEach((label, index) => {
+          const cell = document.createElement("div");
+          cell.textContent = index === 0 ? "+   -" : label;
+          leftHeader.appendChild(cell);
+        });
+
+        const dayHeader = root.querySelector("#right-header-track");
+        for (let day = 1; day <= 31; day++) {
+          const cell = document.createElement("div");
+          cell.className = `day-cell ${day > 28 ? "inactive" : ""}`;
+          cell.textContent = day;
+          dayHeader.appendChild(cell);
+        }
+
+        const leftBody = root.querySelector("#left-body");
+        const rightBody = root.querySelector("#right-body");
+
+        rows.forEach((row) => {
+          const leftRow = document.createElement("div");
+          leftRow.className = `left-row ${row.group ? "group" : ""}`;
+
+          row.cells.forEach((text, i) => {
+            const cell = document.createElement("div");
+            if (i === 0) {
+              cell.classList.add("gutter");
+              cell.textContent = row.group ? "+  -" : "";
+            } else {
+              cell.textContent = text;
+            }
+            leftRow.appendChild(cell);
+          });
+
+          const dayRow = document.createElement("div");
+          dayRow.className = `day-row ${row.group ? "group" : ""}`;
+          for (let day = 1; day <= 31; day++) {
+            const dayCell = document.createElement("div");
+            dayCell.className = `day-cell ${day > 28 ? "inactive" : ""}`;
+            dayRow.appendChild(dayCell);
+          }
+
+          leftBody.appendChild(leftRow);
+          rightBody.appendChild(dayRow);
+        });
+
+        const headerScroll = root.querySelector("#right-header-scroll");
+        const bodyScroll = root.querySelector("#right-body-scroll");
+        let syncing = false;
+
+        function sync(from, to) {
+          if (syncing) return;
+          syncing = true;
+          to.scrollLeft = from.scrollLeft;
+          requestAnimationFrame(() => {
+            syncing = false;
+          });
+        }
+
+        headerScroll.addEventListener("scroll", () => sync(headerScroll, bodyScroll));
+        bodyScroll.addEventListener("scroll", () => sync(bodyScroll, headerScroll));
+      }
+
+      renderMonthBlockGrid(document.getElementById("app"));
+    </script>
+  </body>
+</html>
