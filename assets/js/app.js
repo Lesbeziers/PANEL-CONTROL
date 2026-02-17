@@ -408,6 +408,7 @@ function renderRows() {
 
       const typeCell = leftRow.children[2];
       typeCell.textContent = "";
+      typeCell.classList.add("type-cell");      
       typeCell.appendChild(createBlockTypeSelect(row));
 
       leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
