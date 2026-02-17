@@ -33,8 +33,8 @@ function newRowForBlock(blockType) {
 }
 
 let blocks = [
-  { blockType: "Promo 20", rows: [newRowForBlock("Promo 20")] },
-  { blockType: "Colas", rows: [newRowForBlock("Colas")] },
+  { id: "block-1", blockType: "Promo 20", headerColor: "#70ad47", rows: [newRowForBlock("Promo 20")] },
+  { id: "block-2", blockType: "Promo 20", headerColor: "#fcc000", rows: [newRowForBlock("Promo 20")] },
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
@@ -248,15 +248,20 @@ function renderRows() {
   rightBody.innerHTML = "";
 
   blocks.forEach((block, blockIndex) => {
-    leftBody.appendChild(
-      createLeftRow({
-        group: true,
-        cells: ["", "", block.blockType.toUpperCase(), "MÁXIMO 5 SIMULTÁNEAS", "", "", "", ""],
-        onAddRow: () => insertRow(blockIndex, 0),
-      }),
-    );
-    rightBody.appendChild(createDayRow(true));
+    const groupLeftRow = createLeftRow({
+      group: true,
+      cells: ["", "", block.blockType.toUpperCase(), "MÁXIMO 5 SIMULTÁNEAS", "", "", "", ""],
+      onAddRow: () => insertRow(blockIndex, 0),
+    });
+    const groupDayRow = createDayRow(true);
 
+    if (block.headerColor) {
+      groupLeftRow.style.setProperty("--group-bg", block.headerColor);
+      groupDayRow.style.setProperty("--group-bg", block.headerColor);
+    }
+
+    leftBody.appendChild(groupLeftRow);
+    rightBody.appendChild(groupDayRow);
     block.rows.forEach((row, rowIndex) => {
       const leftRow = createLeftRow();
       const dayRow = createDayRow();
