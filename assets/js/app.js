@@ -48,7 +48,19 @@ let blocks = [
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
+let selectedTitleCell = null;
 
+function setSelectedTitleCell(cell) {
+  if (selectedTitleCell && selectedTitleCell !== cell) {
+    selectedTitleCell.classList.remove("is-selected");
+  }
+
+  selectedTitleCell = cell;
+
+  if (selectedTitleCell) {
+    selectedTitleCell.classList.add("is-selected");
+  }
+}
 function insertRow(blockIndex, atIndex) {
   const block = blocks[blockIndex];
   if (!block) {
@@ -251,8 +263,11 @@ function attachListoCheckbox(cell, row) {
 
 function attachTitleCell(cell, row) {
   cell.classList.add("title-cell");
-
+  let isEditing = false;
+  
   const renderReadMode = () => {
+    isEditing = false;
+    cell.classList.remove("is-editing");    
     cell.textContent = "";
     const text = document.createElement("span");
     text.className = "title-cell__text";
@@ -262,13 +277,25 @@ function attachTitleCell(cell, row) {
   };
 
   const openEditMode = () => {
+    if (isEditing) {
+      return;
+    }
+
+    isEditing = true;
+    cell.classList.add("is-editing");    
     const input = document.createElement("input");
     input.type = "text";
     input.className = "title-cell__input";
     input.maxLength = 100;
     input.value = row.title || "";
-
+    const originalValue = row.title || "";
+    let cancelled = false;
+    
     const commit = () => {
+      if (cancelled) {
+        return;
+      }
+      
       row.title = (input.value || "").slice(0, 100);
       renderReadMode();
     };
@@ -287,6 +314,8 @@ function attachTitleCell(cell, row) {
 
       if (event.key === "Escape") {
         event.preventDefault();
+        cancelled = true;
+        row.title = originalValue;        
         renderReadMode();
       }
     });
@@ -295,11 +324,18 @@ function attachTitleCell(cell, row) {
 
     cell.textContent = "";
     cell.appendChild(input);
-    input.focus();
-    input.select();
+    requestAnimationFrame(() => {
+      input.focus();
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    });
   };
 
-  cell.addEventListener("dblclick", openEditMode);
+  cell.addEventListener("click", () => {
+    setSelectedTitleCell(cell);
+    openEditMode();
+  });
+
   renderReadMode();
 }
 
