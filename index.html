@@ -16,7 +16,6 @@
         --inactive-text: #959595;
         --row-height: 30px;
         --header-height: 38px;
-        --day-width: 28px;
       }
 
       * {
@@ -129,7 +128,7 @@
 
       .right-header-scroll,
       .right-body-scroll {
-        overflow-x: auto;
+        overflow-x: hidden;
         background: #ffffff;
       }
 
@@ -141,8 +140,8 @@
       .right-header-track,
       .day-row {
         display: grid;
-        grid-template-columns: repeat(31, var(--day-width));
-        width: calc(31 * var(--day-width));
+        grid-template-columns: repeat(31, minmax(0, 1fr));
+        width: 100%;
       }
 
       .right-header-track .day-cell {
@@ -243,29 +242,6 @@
 
           leftBody.appendChild(leftRow);
           rightBody.appendChild(dayRow);
-        });
-
-        const headerScroll = root.querySelector("#right-header-scroll");
-        const bodyScroll = root.querySelector("#right-body-scroll");
-        let syncing = false;
-
-        function sync(from, to) {
-          if (syncing) return;
-          syncing = true;
-          to.scrollLeft = from.scrollLeft;
-          requestAnimationFrame(() => {
-            syncing = false;
-          });
-        }
-
-        headerScroll.addEventListener("scroll", () => sync(headerScroll, bodyScroll));
-        bodyScroll.addEventListener("scroll", () => sync(bodyScroll, headerScroll));
-
-        headerScroll.scrollLeft = 0;
-        bodyScroll.scrollLeft = 0;
-        requestAnimationFrame(() => {
-          headerScroll.scrollLeft = 0;
-          bodyScroll.scrollLeft = 0;
         });
       }
 
