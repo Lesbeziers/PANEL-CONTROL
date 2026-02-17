@@ -191,3 +191,34 @@ body {
   min-height: var(--row-height);
   max-height: var(--row-height);
 }
+
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  display: none;
+  min-width: 180px;
+  padding: 4px 0;
+  background: #fff;
+  border: 1px solid #d2d2d2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.context-menu.open {
+  display: block;
+}
+
+.context-menu__item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.context-menu__item:hover,
+.context-menu__item:focus-visible {
+  background: #f3f3f3;
+  outline: none;
+}
