@@ -274,7 +274,8 @@ body {
 }
 
 .context-menu__item {
-  width: 100%;
+  display: block;
+  width: auto;
   border: 0;
   background: transparent;
   text-align: left;
