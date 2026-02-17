@@ -10,7 +10,7 @@
     <main id="app"></main>
 
     <script>
-      const headers = ["", "LISTO", "TIPO", "TÍTULO", "INICIO VIG", "FIN VIG", "GÉNERO", "ID"];
+      const headers = ["LISTO", "TIPO", "TÍTULO", "INICIO VIG", "FIN VIG", "GÉNERO", "ID"];
       const rows = [
         {
           group: true,
@@ -43,9 +43,9 @@
         `;
 
         const leftHeader = root.querySelector("#left-header");
-        headers.forEach((label, index) => {
+        headers.forEach((label) => {
           const cell = document.createElement("div");
-          cell.textContent = index === 0 ? "+   -" : label;
+          cell.textContent = label;
           leftHeader.appendChild(cell);
         });
 
