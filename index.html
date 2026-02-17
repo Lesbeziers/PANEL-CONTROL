@@ -68,7 +68,12 @@
             const cell = document.createElement("div");
             if (i === 0) {
               cell.classList.add("gutter");
-              cell.textContent = row.group ? "+  -" : "";
+              if (row.group) {
+                cell.innerHTML = `
+                  <button class="gutter-icon-btn" aria-label="Añadir fila">+</button>
+                  <button class="gutter-icon-btn" aria-label="Eliminar fila">−</button>
+                `;
+              }
             } else {
               cell.textContent = text;
             }
