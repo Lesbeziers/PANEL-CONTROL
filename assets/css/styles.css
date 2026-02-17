@@ -228,6 +228,46 @@ body {
   font: inherit;
 }
 
+
+.left-row > div.checkbox-cell {
+  justify-content: center;
+  padding: 0;
+}
+
+.listo-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #8b8b8b;
+  border-radius: 2px;
+  background: #f8f8f8;
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+}
+
+.listo-checkbox:checked {
+  background: #36a13a;
+  border-color: #2e8d33;
+}
+
+.listo-checkbox:checked::after {
+  content: "";
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-bottom: 1px;
+}
+
+.listo-checkbox:focus-visible,
+.checkbox-cell:focus-visible {
+  outline: 2px solid #4d90fe;
+  outline-offset: 1px;
+}
+
 .right-header-scroll,
 .right-body-scroll {
   overflow-x: hidden;
