@@ -1,20 +1,53 @@
 const headers = ["LISTO", "TIPO", "TÍTULO", "INICIO VIG", "FIN VIG", "GÉNERO", "ID"];
 
+const blockTypeOptions = [
+  "Arranque",
+  "Bumper",
+  "Canales LaLiga",
+  "Canales Golf",
+  "Colas",
+  "Combo",
+  "Distribuidores",
+  "ID",
+  "Intruso",
+  "Loop",
+  "Otras duraciones",
+  "Pasos a Publi",
+  "Pre-Roll",
+  "Promo 20",
+  "Promo 40",
+];
+
 let rowId = 0;
 
 function newRow() {
   rowId += 1;
-  return { id: `row-${Date.now()}-${rowId}` };
+  return { id: `row-${Date.now()}-${rowId}`, blockType: "", promoBlockType: "" };
 }
 
-let rows = [newRow()];
-let contextMenu = { open: false, x: 0, y: 0, rowIndex: -1 };
+function newRowForBlock(blockType) {
+  const row = newRow();
+  row.blockType = blockType;
+  row.promoBlockType = blockTypeOptions.includes(blockType) ? blockType : "";
+  return row;
+}
+
+let blocks = [
+  { blockType: "Promo 20", rows: [newRowForBlock("Promo 20")] },
+  { blockType: "Colas", rows: [newRowForBlock("Colas")] },
+];
+let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
 
-function insertRow(atIndex) {
-  const nextRows = [...rows];
-  nextRows.splice(atIndex, 0, newRow());
-  rows = nextRows;
+function insertRow(blockIndex, atIndex) {
+  const block = blocks[blockIndex];
+  if (!block) {
+    return;
+  }
+
+  const nextRows = [...block.rows];
+  nextRows.splice(atIndex, 0, newRowForBlock(block.blockType));
+  blocks[blockIndex] = { ...block, rows: nextRows };
   renderRows();
 }
 
@@ -38,9 +71,9 @@ function ensureContextMenuElement() {
     }
 
     if (target.dataset.action === "above") {
-      insertRow(contextMenu.rowIndex);
+      insertRow(contextMenu.blockIndex, contextMenu.rowIndex);
     } else {
-      insertRow(contextMenu.rowIndex + 1);
+      insertRow(contextMenu.blockIndex, contextMenu.rowIndex + 1);
     }
 
     closeContextMenu();
@@ -63,7 +96,7 @@ function handleMenuEscape(event) {
 }
 
 function closeContextMenu() {
-  contextMenu = { open: false, x: 0, y: 0, rowIndex: -1 };
+  contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
   if (menuElement) {
     menuElement.classList.remove("open");
   }
@@ -71,13 +104,14 @@ function closeContextMenu() {
   document.removeEventListener("keydown", handleMenuEscape);
 }
 
-function openContextMenu(event, rowIndex) {
+function openContextMenu(event, blockIndex, rowIndex) {
   event.preventDefault();
 
   contextMenu = {
     open: true,
     x: event.clientX,
     y: event.clientY,
+    blockIndex,
     rowIndex,
   };
 
@@ -90,7 +124,7 @@ function openContextMenu(event, rowIndex) {
   document.addEventListener("keydown", handleMenuEscape);
 }
 
-function createLeftRow({ group = false, cells = [] } = {}) {
+function createLeftRow({ group = false, cells = [], onAddRow } = {}) {
   const leftRow = document.createElement("div");
   leftRow.className = `left-row ${group ? "group" : ""}`;
 
@@ -106,7 +140,9 @@ function createLeftRow({ group = false, cells = [] } = {}) {
         addBtn.setAttribute("aria-label", "Añadir fila");
         addBtn.textContent = "+";
         addBtn.addEventListener("click", () => {
-          insertRow(0);
+          if (typeof onAddRow === "function") {
+            onAddRow();
+          }
         });
 
         const removeBtn = document.createElement("button");
@@ -125,6 +161,32 @@ function createLeftRow({ group = false, cells = [] } = {}) {
   }
 
   return leftRow;
+}
+
+function createBlockTypeSelect(row) {
+  const select = document.createElement("select");
+  select.className = "block-type-select";
+  const selectedValue = blockTypeOptions.includes(row.promoBlockType) ? row.promoBlockType : "";
+
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = "";
+  select.appendChild(emptyOption);
+
+  blockTypeOptions.forEach((optionValue) => {
+    const option = document.createElement("option");
+    option.value = optionValue;
+    option.textContent = optionValue;
+    option.selected = optionValue === selectedValue;
+    select.appendChild(option);
+  });
+
+  select.value = selectedValue;
+  select.addEventListener("change", (event) => {
+    row.promoBlockType = event.target.value;
+  });
+
+  return select;
 }
 
 function createDayRow(group = false) {
@@ -185,23 +247,30 @@ function renderRows() {
   leftBody.innerHTML = "";
   rightBody.innerHTML = "";
 
-  leftBody.appendChild(
-    createLeftRow({
-      group: true,
-      cells: ["", "", "PROMO 20", "MÁXIMO 5 SIMULTÁNEAS", "", "", "", ""],
-    }),
-  );
-  rightBody.appendChild(createDayRow(true));
+  blocks.forEach((block, blockIndex) => {
+    leftBody.appendChild(
+      createLeftRow({
+        group: true,
+        cells: ["", "", block.blockType.toUpperCase(), "MÁXIMO 5 SIMULTÁNEAS", "", "", "", ""],
+        onAddRow: () => insertRow(blockIndex, 0),
+      }),
+    );
+    rightBody.appendChild(createDayRow(true));
 
-  rows.forEach((_, rowIndex) => {
-    const leftRow = createLeftRow();
-    const dayRow = createDayRow();
+    block.rows.forEach((row, rowIndex) => {
+      const leftRow = createLeftRow();
+      const dayRow = createDayRow();
 
-    leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, rowIndex));
-    dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, rowIndex));
+      const typeCell = leftRow.children[2];
+      typeCell.textContent = "";
+      typeCell.appendChild(createBlockTypeSelect(row));
 
-    leftBody.appendChild(leftRow);
-    rightBody.appendChild(dayRow);
+      leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
+      dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
+
+      leftBody.appendChild(leftRow);
+      rightBody.appendChild(dayRow);
+    });
   });
 }
 
