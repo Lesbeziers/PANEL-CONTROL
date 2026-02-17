@@ -57,7 +57,15 @@ body {
 .left-row,
 .left-header {
   display: grid;
+}
+
+.left-row {
   grid-template-columns: 46px 64px 142px 320px 82px 82px 120px 74px;
+}
+
+.left-header {
+  grid-template-columns: 64px 142px 320px 82px 82px 120px 74px;
+  padding-left: 46px;
 }
 
 .left-grid,
