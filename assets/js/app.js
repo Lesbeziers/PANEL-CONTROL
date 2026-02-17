@@ -1,4 +1,14 @@
-const headers = ["LISTO", "TIPO", "TÍTULO", "INICIO VIG", "FIN VIG", "GÉNERO", "ID"];
+const columns = [
+  { key: "listo", label: "LISTO", type: "checkbox" },
+  { key: "promoBlockType", label: "TIPO", type: "select" },
+  { key: "title", label: "TÍTULO", type: "text" },
+  { key: "startDate", label: "INICIO VIG", type: "text" },
+  { key: "endDate", label: "FIN VIG", type: "text" },
+  { key: "genre", label: "GÉNERO", type: "text" },
+  { key: "id", label: "ID", type: "text" },
+];
+
+const headers = columns.map((column) => column.label);
 
 const blockTypeOptions = [
   "Arranque",
@@ -22,7 +32,7 @@ let rowId = 0;
 
 function newRow() {
   rowId += 1;
-  return { id: `row-${Date.now()}-${rowId}`, blockType: "", promoBlockType: "" };
+  return { id: `row-${Date.now()}-${rowId}`, blockType: "", promoBlockType: "", listo: false };
 }
 
 function newRowForBlock(blockType) {
@@ -202,6 +212,44 @@ function createDayRow(group = false) {
   return dayRow;
 }
 
+function attachListoCheckbox(cell, row) {
+  cell.classList.add("checkbox-cell");
+  cell.textContent = "";
+  cell.tabIndex = 0;
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.className = "listo-checkbox";
+  input.checked = !!row.listo;
+  input.setAttribute("aria-label", "Marcar LISTO");
+
+  const toggleListo = () => {
+    row.listo = !row.listo;
+    input.checked = row.listo;
+  };
+
+  input.addEventListener("change", () => {
+    row.listo = input.checked;
+  });
+
+  cell.addEventListener("click", (event) => {
+    if (event.target === input) {
+      return;
+    }
+    toggleListo();
+  });
+
+  cell.addEventListener("keydown", (event) => {
+    if (event.key === " " || event.key === "Spacebar" || event.key === "Enter") {
+      event.preventDefault();
+      toggleListo();
+    }
+  });
+
+  cell.appendChild(input);
+}
+
+
 function renderMonthBlockGrid(root) {
   root.innerHTML = `
     <section class="month-block" aria-label="MonthBlockGrid Febrero 2026">
@@ -265,6 +313,8 @@ function renderRows() {
     block.rows.forEach((row, rowIndex) => {
       const leftRow = createLeftRow();
       const dayRow = createDayRow();
+      
+      attachListoCheckbox(leftRow.children[1], row);
 
       const typeCell = leftRow.children[2];
       typeCell.textContent = "";
