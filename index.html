@@ -11,8 +11,8 @@
         --grid-border: #585858;
         --group-bg: #2f5f98;
         --group-text: #ffffff;
-        --cell-bg: #efefef;
-        --inactive-bg: #d5d5d5;
+        --cell-bg: #ffffff;
+        --inactive-bg: #f1f1f1;
         --inactive-text: #959595;
         --row-height: 30px;
         --header-height: 38px;
@@ -34,7 +34,7 @@
         border: 1px solid var(--grid-border);
         width: 100%;
         max-width: 1560px;
-        background: var(--cell-bg);
+        background: #ffffff;
       }
 
       .month-block__header {
@@ -49,6 +49,7 @@
       .month-block__body {
         height: 320px;
         overflow-y: auto;
+        background: #ffffff;
       }
 
       .month-block__body-grid {
@@ -56,11 +57,16 @@
         grid-template-columns: 930px 1fr;
       }
 
-      .left-grid,
       .left-row,
       .left-header {
         display: grid;
         grid-template-columns: 46px 64px 142px 320px 82px 82px 120px 74px;
+      }
+
+      .left-grid,
+      #right-body {
+        display: flex;
+        flex-direction: column;
       }
 
       .left-header > div,
@@ -70,6 +76,7 @@
         border-right: 1px solid var(--grid-border);
         border-bottom: 1px solid var(--grid-border);
         font-size: 12px;
+        background: #ffffff;
       }
 
       .left-header > div,
@@ -87,10 +94,16 @@
         background: var(--header-bg);
       }
 
+      .left-header > div:last-child,
+      .left-row > div:last-child {
+        border-right: 2px solid var(--grid-border);
+      }
+
       .left-row > div,
       .day-row .day-cell {
         height: var(--row-height);
-        background: var(--cell-bg);
+        min-height: var(--row-height);
+        max-height: var(--row-height);
       }
 
       .left-row > div {
@@ -117,6 +130,7 @@
       .right-header-scroll,
       .right-body-scroll {
         overflow-x: auto;
+        background: #ffffff;
       }
 
       .right-header-scroll {
@@ -141,7 +155,12 @@
       }
 
       .day-row .day-cell.inactive {
-        background: #e2e2e2;
+        background: var(--inactive-bg);
+      }
+
+      .day-row {
+        min-height: var(--row-height);
+        max-height: var(--row-height);
       }
     </style>
   </head>
@@ -241,6 +260,13 @@
 
         headerScroll.addEventListener("scroll", () => sync(headerScroll, bodyScroll));
         bodyScroll.addEventListener("scroll", () => sync(bodyScroll, headerScroll));
+
+        headerScroll.scrollLeft = 0;
+        bodyScroll.scrollLeft = 0;
+        requestAnimationFrame(() => {
+          headerScroll.scrollLeft = 0;
+          bodyScroll.scrollLeft = 0;
+        });
       }
 
       renderMonthBlockGrid(document.getElementById("app"));
