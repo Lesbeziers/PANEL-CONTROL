@@ -221,6 +221,13 @@ body {
   outline-offset: 1px;
 }
 
+.block-type-select {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+}
+
 .right-header-scroll,
 .right-body-scroll {
   overflow-x: hidden;
