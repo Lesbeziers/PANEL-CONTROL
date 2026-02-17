@@ -48,18 +48,85 @@ let blocks = [
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
-let selectedTitleCell = null;
+let selectedCell = null;
 
-function setSelectedTitleCell(cell) {
-  if (selectedTitleCell && selectedTitleCell !== cell) {
-    selectedTitleCell.classList.remove("is-selected");
+function setSelectedCell(cell) {
+  if (selectedCell && selectedCell !== cell) {
+    selectedCell.classList.remove("is-selected");
   }
 
-  selectedTitleCell = cell;
+  selectedCell = cell;
 
-  if (selectedTitleCell) {
-    selectedTitleCell.classList.add("is-selected");
+  if (selectedCell) {
+    selectedCell.classList.add("is-selected");
   }
+}
+
+function getCellMeta(cell) {
+  if (!cell?.dataset) {
+    return null;
+  }
+
+  const blockIndex = Number.parseInt(cell.dataset.blockIndex, 10);
+  const rowIndex = Number.parseInt(cell.dataset.rowIndex, 10);
+  const columnKey = cell.dataset.columnKey;
+
+  if (Number.isNaN(blockIndex) || Number.isNaN(rowIndex) || !columnKey) {
+    return null;
+  }
+
+  return { blockIndex, rowIndex, columnKey };
+}
+
+function moveSelectionDownWithinBlock(cell) {
+  const meta = getCellMeta(cell);
+  if (!meta) {
+    return;
+  }
+
+  const block = blocks[meta.blockIndex];
+  const nextRowIndex = meta.rowIndex + 1;
+  if (!block || nextRowIndex >= block.rows.length) {
+    return;
+  }
+
+  const nextCell = document.querySelector(
+    `[data-block-index="${meta.blockIndex}"][data-row-index="${nextRowIndex}"][data-column-key="${meta.columnKey}"]`
+  );
+
+  if (!nextCell) {
+    return;
+  }
+
+  setSelectedCell(nextCell);
+  nextCell.focus();
+}
+
+function handleGridEnterKey(event) {
+  if (event.key !== "Enter") {
+    return;
+  }
+
+  const activeElement = document.activeElement;
+  const cell = activeElement?.closest?.("[data-column-key]") || selectedCell;
+  if (!cell) {
+    return;
+  }
+
+  const titleInput = activeElement?.classList?.contains("title-cell__input") ? activeElement : null;
+  if (titleInput) {
+    event.preventDefault();
+    titleInput.blur();
+    moveSelectionDownWithinBlock(cell);
+    return;
+  }
+
+  if (!getCellMeta(cell)) {
+    return;
+  }
+
+  event.preventDefault();
+  moveSelectionDownWithinBlock(cell);
 }
 function insertRow(blockIndex, atIndex) {
   const block = blocks[blockIndex];
@@ -245,6 +312,7 @@ function attachListoCheckbox(cell, row) {
   });
 
   cell.addEventListener("click", (event) => {
+    setSelectedCell(cell);    
     if (event.target === input) {
       return;
     }
@@ -252,12 +320,16 @@ function attachListoCheckbox(cell, row) {
   });
 
   cell.addEventListener("keydown", (event) => {
-    if (event.key === " " || event.key === "Spacebar" || event.key === "Enter") {
+    if (event.key === " " || event.key === "Spacebar") {
       event.preventDefault();
       toggleListo();
     }
   });
 
+  cell.addEventListener("focus", () => {
+    setSelectedCell(cell);
+  });
+  
   cell.appendChild(input);
 }
 
@@ -307,11 +379,6 @@ function attachTitleCell(cell, row) {
     });
 
     input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        commit();
-      }
-
       if (event.key === "Escape") {
         event.preventDefault();
         cancelled = true;
@@ -332,10 +399,14 @@ function attachTitleCell(cell, row) {
   };
 
   cell.addEventListener("click", () => {
-    setSelectedTitleCell(cell);
+    setSelectedCell(cell);
     openEditMode();
   });
 
+  cell.addEventListener("focus", () => {
+    setSelectedCell(cell);
+  });
+  
   renderReadMode();
 }
 
@@ -406,11 +477,34 @@ function renderRows() {
       attachListoCheckbox(leftRow.children[1], row);
       attachTitleCell(leftRow.children[3], row);
 
+      leftRow.children[1].dataset.blockIndex = String(blockIndex);
+      leftRow.children[1].dataset.rowIndex = String(rowIndex);
+      leftRow.children[1].dataset.columnKey = "listo";
+
+      leftRow.children[3].dataset.blockIndex = String(blockIndex);
+      leftRow.children[3].dataset.rowIndex = String(rowIndex);
+      leftRow.children[3].dataset.columnKey = "title";
+      leftRow.children[3].tabIndex = 0;
+      
       const typeCell = leftRow.children[2];
       typeCell.textContent = "";
-      typeCell.classList.add("type-cell");      
-      typeCell.appendChild(createBlockTypeSelect(row));
+      typeCell.classList.add("type-cell");
+      typeCell.dataset.blockIndex = String(blockIndex);
+      typeCell.dataset.rowIndex = String(rowIndex);
+      typeCell.dataset.columnKey = "promoBlockType";
+      typeCell.tabIndex = 0;
+      typeCell.addEventListener("focus", () => {
+        setSelectedCell(typeCell);
+      });
+      typeCell.addEventListener("click", () => {
+        setSelectedCell(typeCell);
+      });
 
+      const typeSelect = createBlockTypeSelect(row);
+      typeSelect.addEventListener("focus", () => {
+        setSelectedCell(typeCell);
+      });
+      typeCell.appendChild(typeSelect);
       leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
       dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
 
@@ -421,3 +515,4 @@ function renderRows() {
 }
 
 renderMonthBlockGrid(document.getElementById("app"));
+document.addEventListener("keydown", handleGridEnterKey);
