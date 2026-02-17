@@ -32,7 +32,7 @@ let rowId = 0;
 
 function newRow() {
   rowId += 1;
-  return { id: `row-${Date.now()}-${rowId}`, blockType: "", promoBlockType: "", listo: false };
+  return { id: `row-${Date.now()}-${rowId}`, blockType: "", promoBlockType: "", listo: false, title: "" };
 }
 
 function newRowForBlock(blockType) {
@@ -249,6 +249,59 @@ function attachListoCheckbox(cell, row) {
   cell.appendChild(input);
 }
 
+function attachTitleCell(cell, row) {
+  cell.classList.add("title-cell");
+
+  const renderReadMode = () => {
+    cell.textContent = "";
+    const text = document.createElement("span");
+    text.className = "title-cell__text";
+    text.textContent = row.title || "";
+    text.title = row.title || "";
+    cell.appendChild(text);
+  };
+
+  const openEditMode = () => {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "title-cell__input";
+    input.maxLength = 100;
+    input.value = row.title || "";
+
+    const commit = () => {
+      row.title = (input.value || "").slice(0, 100);
+      renderReadMode();
+    };
+
+    input.addEventListener("input", () => {
+      if (input.value.length > 100) {
+        input.value = input.value.slice(0, 100);
+      }
+    });
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        commit();
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        renderReadMode();
+      }
+    });
+
+    input.addEventListener("blur", commit, { once: true });
+
+    cell.textContent = "";
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+  };
+
+  cell.addEventListener("dblclick", openEditMode);
+  renderReadMode();
+}
 
 function renderMonthBlockGrid(root) {
   root.innerHTML = `
@@ -315,6 +368,7 @@ function renderRows() {
       const dayRow = createDayRow();
       
       attachListoCheckbox(leftRow.children[1], row);
+      attachTitleCell(leftRow.children[3], row);
 
       const typeCell = leftRow.children[2];
       typeCell.textContent = "";
