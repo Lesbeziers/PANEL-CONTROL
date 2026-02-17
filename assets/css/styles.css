@@ -41,6 +41,7 @@ body {
   display: grid;
   grid-template-columns: 930px calc(31 * var(--day-width));
   background: var(--header-bg);
+  overflow: hidden;
 }
 
 .month-block__body {
