@@ -133,8 +133,27 @@ body {
 .left-row .gutter {
   justify-content: center;
   gap: 8px;
-  font-weight: 700;
   padding: 0;
+}
+
+.gutter-icon-btn {
+  background: transparent;
+  border: none;
+  padding: 0 6px;
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  color: inherit;
+}
+
+.gutter-icon-btn:hover {
+  color: #f5f9ff;
+}
+
+.gutter-icon-btn:focus-visible {
+  outline: 1px dotted currentColor;
+  outline-offset: 1px;
 }
 
 .right-header-scroll,
