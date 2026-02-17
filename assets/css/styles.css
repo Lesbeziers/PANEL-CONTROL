@@ -1,1 +1,165 @@
+:root {
+  --header-bg: #5e5e5e;
+  --header-text: #f2f2f2;
+  --grid-border: #585858;
+  --group-bg: #2f5f98;
+  --group-text: #ffffff;
+  --cell-bg: #ffffff;
+  --inactive-bg: #f1f1f1;
+  --inactive-text: #959595;
+  --row-height: 30px;
+  --header-height: 38px;
+  --day-width: 20px;
+}
 
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 20px;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #ffffff;
+  color: #111;
+}
+
+#app {
+  width: 100%;
+}
+
+.month-block {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #ffffff;
+}
+
+.month-block__header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 930px calc(31 * var(--day-width));
+  background: var(--header-bg);
+}
+
+.month-block__body {
+  height: auto;
+  overflow: visible;
+  background: #ffffff;
+}
+
+.month-block__body-grid {
+  display: grid;
+  grid-template-columns: 930px calc(31 * var(--day-width));
+}
+
+.left-row,
+.left-header {
+  display: grid;
+  grid-template-columns: 46px 64px 142px 320px 82px 82px 120px 74px;
+}
+
+.left-grid,
+#right-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.left-header > div,
+.right-header-track .day-cell,
+.left-row > div,
+.day-row .day-cell {
+  border-right: 1px solid var(--grid-border);
+  border-bottom: 1px solid var(--grid-border);
+  font-size: 12px;
+  background: #ffffff;
+}
+
+.right-header-track .day-cell:last-child,
+.day-row .day-cell:last-child {
+  border-right: none;
+}
+
+.left-header > div,
+.right-header-track .day-cell {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-weight: 700;
+  color: var(--header-text);
+}
+
+.left-header > div {
+  background: var(--header-bg);
+}
+
+.left-header > div:last-child,
+.left-row > div:last-child {
+  border-right: 2px solid var(--grid-border);
+}
+
+.left-row > div,
+.day-row .day-cell {
+  height: var(--row-height);
+  min-height: var(--row-height);
+  max-height: var(--row-height);
+}
+
+.left-row > div {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.left-row.group > div,
+.day-row.group .day-cell {
+  background: var(--group-bg);
+  color: var(--group-text);
+}
+
+.left-row .gutter {
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+  padding: 0;
+}
+
+.right-header-scroll,
+.right-body-scroll {
+  overflow-x: hidden;
+  background: #ffffff;
+}
+
+.right-header-scroll {
+  overflow-y: hidden;
+  background: var(--header-bg);
+}
+
+.right-header-track,
+.day-row {
+  display: grid;
+  grid-template-columns: repeat(31, var(--day-width));
+}
+
+.right-header-track .day-cell {
+  background: var(--header-bg);
+}
+
+.right-header-track .day-cell.inactive {
+  background: #777;
+  color: #bcbcbc;
+}
+
+.day-row .day-cell.inactive {
+  background: var(--inactive-bg);
+}
+
+.day-row {
+  min-height: var(--row-height);
+  max-height: var(--row-height);
+}
