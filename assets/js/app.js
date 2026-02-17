@@ -8,6 +8,87 @@ function newRow() {
 }
 
 let rows = [newRow()];
+let contextMenu = { open: false, x: 0, y: 0, rowIndex: -1 };
+let menuElement = null;
+
+function insertRow(atIndex) {
+  const nextRows = [...rows];
+  nextRows.splice(atIndex, 0, newRow());
+  rows = nextRows;
+  renderRows();
+}
+
+function ensureContextMenuElement() {
+  if (menuElement) {
+    return menuElement;
+  }
+
+  menuElement = document.createElement("div");
+  menuElement.className = "context-menu";
+  menuElement.setAttribute("role", "menu");
+  menuElement.innerHTML = `
+    <button type="button" class="context-menu__item" data-action="above" role="menuitem">Insertar fila encima</button>
+    <button type="button" class="context-menu__item" data-action="below" role="menuitem">Insertar fila debajo</button>
+  `;
+
+  menuElement.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-action]");
+    if (!target || !contextMenu.open) {
+      return;
+    }
+
+    if (target.dataset.action === "above") {
+      insertRow(contextMenu.rowIndex);
+    } else {
+      insertRow(contextMenu.rowIndex + 1);
+    }
+
+    closeContextMenu();
+  });
+
+  document.body.appendChild(menuElement);
+  return menuElement;
+}
+
+function handleOutsidePointer(event) {
+  if (menuElement && !menuElement.contains(event.target)) {
+    closeContextMenu();
+  }
+}
+
+function handleMenuEscape(event) {
+  if (event.key === "Escape") {
+    closeContextMenu();
+  }
+}
+
+function closeContextMenu() {
+  contextMenu = { open: false, x: 0, y: 0, rowIndex: -1 };
+  if (menuElement) {
+    menuElement.classList.remove("open");
+  }
+  document.removeEventListener("mousedown", handleOutsidePointer);
+  document.removeEventListener("keydown", handleMenuEscape);
+}
+
+function openContextMenu(event, rowIndex) {
+  event.preventDefault();
+
+  contextMenu = {
+    open: true,
+    x: event.clientX,
+    y: event.clientY,
+    rowIndex,
+  };
+
+  const menu = ensureContextMenuElement();
+  menu.classList.add("open");
+  menu.style.left = `${contextMenu.x}px`;
+  menu.style.top = `${contextMenu.y}px`;
+
+  document.addEventListener("mousedown", handleOutsidePointer);
+  document.addEventListener("keydown", handleMenuEscape);
+}
 
 function createLeftRow({ group = false, cells = [] } = {}) {
   const leftRow = document.createElement("div");
@@ -25,8 +106,7 @@ function createLeftRow({ group = false, cells = [] } = {}) {
         addBtn.setAttribute("aria-label", "Añadir fila");
         addBtn.textContent = "+";
         addBtn.addEventListener("click", () => {
-          rows = [...rows, newRow()];
-          renderRows();
+          insertRow(0);
         });
 
         const removeBtn = document.createElement("button");
@@ -113,9 +193,15 @@ function renderRows() {
   );
   rightBody.appendChild(createDayRow(true));
 
-  rows.forEach(() => {
-    leftBody.appendChild(createLeftRow());
-    rightBody.appendChild(createDayRow());
+  rows.forEach((_, rowIndex) => {
+    const leftRow = createLeftRow();
+    const dayRow = createDayRow();
+
+    leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, rowIndex));
+    dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, rowIndex));
+
+    leftBody.appendChild(leftRow);
+    rightBody.appendChild(dayRow);
   });
 }
 
