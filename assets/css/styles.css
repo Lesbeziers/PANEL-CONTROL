@@ -614,3 +614,26 @@ body {
   background: #f3f3f3;
   outline: none;
 }
+
+.grid-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translate(-50%, 8px);
+  background: rgba(17, 17, 17, 0.94);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+  z-index: 80;
+}
+
+.grid-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
