@@ -262,9 +262,26 @@ body {
   overflow: hidden;
 }
 
-.title-cell.is-selected,
-.title-cell.is-editing {
-  box-shadow: inset 0 0 0 1px #9b9b9b;
+.left-row > div[data-column-key].is-selected,
+.left-row > div[data-column-key].is-editing {
+  position: relative;
+  z-index: 2;
+  box-shadow: inset 0 0 0 2px #00b050;
+}
+
+.left-row > div[data-column-key].is-editing {
+  box-shadow: inset 0 0 0 2px #009944;
+}
+
+.left-row > div[data-column-key].is-selected::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 6px;
+  height: 6px;
+  background: #00b050;
+  border: 1px solid #fff;
 }
 
 .title-cell__text {
