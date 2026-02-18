@@ -274,16 +274,13 @@ body {
 .left-row > div[data-column-key].is-editing {
   position: relative;
   z-index: 2;
-  box-shadow: inset 0 0 0 2px #00b050;
-}
-
-.left-row > div[data-column-key].is-editing {
-  box-shadow: inset 0 0 0 2px #009944;
+  box-shadow: inset 0 0 0 2px #00b050 !important;
 }
 
 .left-row > div[data-column-key].is-selected::after {
   content: "";
   position: absolute;
+  z-index: 3;
   right: -1px;
   bottom: -1px;
   width: 6px;
