@@ -49,6 +49,7 @@ let blocks = [
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
 let selectedCell = null;
+let selectedCellState = null;
 let editingCell = null;
 let titleOverlayLayer = null;
 
@@ -70,15 +71,28 @@ function getTitleOverlayLayer() {
 }
 
 function setSelectedCell(cell) {
-  if (selectedCell && selectedCell !== cell) {
+  if (selectedCell && selectedCell !== cell && selectedCell.isConnected) {
     selectedCell.classList.remove("is-selected");
   }
 
   selectedCell = cell;
 
-  if (selectedCell) {
+  if (selectedCell?.dataset?.rowId && selectedCell?.dataset?.columnKey) {
+    selectedCellState = {
+      rowId: selectedCell.dataset.rowId,
+      columnKey: selectedCell.dataset.columnKey,
+    };
+  } else {
+    selectedCellState = null;
+  }
+
+  if (selectedCell?.isConnected) {
     selectedCell.classList.add("is-selected");
   }
+}
+
+function isSelectedCellState(row, columnKey) {
+  return selectedCellState?.rowId === row.id && selectedCellState?.columnKey === columnKey;
 }
 
 function getCellMeta(cell) {
@@ -653,7 +667,8 @@ function renderRows() {
 
   leftBody.innerHTML = "";
   rightBody.innerHTML = "";
-
+  selectedCell = null;
+  
   blocks.forEach((block, blockIndex) => {
     const groupLeftRow = createLeftRow({
       group: true,
@@ -678,20 +693,35 @@ function renderRows() {
 
       leftRow.children[1].dataset.blockIndex = String(blockIndex);
       leftRow.children[1].dataset.rowIndex = String(rowIndex);
+      leftRow.children[1].dataset.rowId = row.id;
       leftRow.children[1].dataset.columnKey = "listo";
+      if (isSelectedCellState(row, "listo")) {
+        selectedCell = leftRow.children[1];
+        selectedCell.classList.add("is-selected");
+      }
 
       leftRow.children[3].dataset.blockIndex = String(blockIndex);
       leftRow.children[3].dataset.rowIndex = String(rowIndex);
+      leftRow.children[3].dataset.rowId = row.id;
       leftRow.children[3].dataset.columnKey = "title";
       leftRow.children[3].tabIndex = 0;
+      if (isSelectedCellState(row, "title")) {
+        selectedCell = leftRow.children[3];
+        selectedCell.classList.add("is-selected");
+      }
       
       const typeCell = leftRow.children[2];
       typeCell.textContent = "";
       typeCell.classList.add("type-cell");
       typeCell.dataset.blockIndex = String(blockIndex);
       typeCell.dataset.rowIndex = String(rowIndex);
+      typeCell.dataset.rowId = row.id;
       typeCell.dataset.columnKey = "promoBlockType";
       typeCell.tabIndex = 0;
+      if (isSelectedCellState(row, "promoBlockType")) {
+        selectedCell = typeCell;
+        selectedCell.classList.add("is-selected");
+      }
       typeCell.addEventListener("focus", () => {
         setSelectedCell(typeCell);
       });
