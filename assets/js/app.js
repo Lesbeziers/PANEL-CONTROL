@@ -178,12 +178,14 @@ function getAdjacentCellByArrow(cell, key) {
 }
 
 function focusCellWithoutEditing(cell) {
-  if (!cell) {
+  if (!cell || editingCell) {
     return;
   }
 
   requestAnimationFrame(() => {
-    cell.focus();
+    if (!editingCell) {
+      cell.focus();
+    }
   });
 }
 
@@ -487,14 +489,40 @@ function attachTitleCell(cell, row) {
   cell.classList.add("title-cell");
   let isEditing = false;
 
+  const placeCaretAtEnd = (editorEl) => {
+    if (!editorEl || !editorEl.isConnected) {
+      return;
+    }
+
+    if (editorEl instanceof HTMLInputElement || editorEl instanceof HTMLTextAreaElement) {
+      const end = editorEl.value.length;
+      editorEl.setSelectionRange(end, end);
+      return;
+    }
+
+    if (!editorEl.isContentEditable) {
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection) {
+      return;
+    }
+
+    const range = document.createRange();
+    range.selectNodeContents(editorEl);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
   const focusTitleEditor = (editorEl) => {
     if (!editorEl || !editorEl.isConnected) {
       return;
     }
 
-    editorEl.focus();
-    const end = editorEl.value.length;
-    editorEl.setSelectionRange(end, end);
+    editorEl.focus({ preventScroll: true });
+    placeCaretAtEnd(editorEl);
   };
   
   const renderReadMode = () => {
@@ -616,10 +644,9 @@ function attachTitleCell(cell, row) {
     updateOverlayPosition();
 
     requestAnimationFrame(() => {
-      focusTitleEditor(input);
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         focusTitleEditor(input);
-      }, 0);
+      });
     });
   };
 
@@ -627,6 +654,7 @@ function attachTitleCell(cell, row) {
 
   cell.addEventListener("click", () => {
     setSelectedCell(cell);
+    openEditMode({ keepContent: true });
   });
 
   cell.addEventListener("focus", () => {
