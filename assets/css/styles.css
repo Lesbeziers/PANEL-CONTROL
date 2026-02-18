@@ -133,11 +133,11 @@ body {
 }
 
 .left-row {
-  grid-template-columns: 46px 64px 142px 320px 82px 82px 120px 74px;
+  grid-template-columns: 46px 64px 462px 82px 82px 120px 74px;
 }
 
 .left-header {
-  grid-template-columns: 64px 142px 320px 82px 82px 120px 74px;
+  grid-template-columns: 64px 462px 82px 82px 120px 74px;
   padding-left: 46px;
 }
 
@@ -229,41 +229,9 @@ body {
   outline-offset: 1px;
 }
 
-.type-cell {
-  position: relative;
-}
-
-.type-cell::after {
-  content: "";
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 0;
-  height: 0;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-top: 5px solid #444;
-  pointer-events: none;
-}
-
-.type-cell .block-type-select {
-  width: 100%;
-  padding-right: 20px;  
-  border: 0;
-  border-color: transparent;  
-  background: transparent;
-  box-shadow: none;
-  outline: none;
-  appearance: none;  
-  font: inherit;
-}
-
-.type-cell .block-type-select:focus,
-.type-cell .block-type-select:focus-visible {
-  outline: none;
-  box-shadow: none;
-  border-color: transparent;
+.group-title-cell {
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .title-cell {
