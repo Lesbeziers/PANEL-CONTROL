@@ -486,6 +486,16 @@ function attachListoCheckbox(cell, row) {
 function attachTitleCell(cell, row) {
   cell.classList.add("title-cell");
   let isEditing = false;
+
+  const focusTitleEditor = (editorEl) => {
+    if (!editorEl || !editorEl.isConnected) {
+      return;
+    }
+
+    editorEl.focus();
+    const end = editorEl.value.length;
+    editorEl.setSelectionRange(end, end);
+  };
   
   const renderReadMode = () => {
     isEditing = false;
@@ -516,6 +526,8 @@ function attachTitleCell(cell, row) {
     const input = document.createElement("input");
     input.type = "text";
     input.className = "title-cell__input editor-overlay is-editing";
+    input.disabled = false;
+    input.readOnly = false;
     input.maxLength = 100;
     input.value = replaceWith !== undefined ? replaceWith : row.title || "";
     if (keepContent) {
@@ -604,9 +616,10 @@ function attachTitleCell(cell, row) {
     updateOverlayPosition();
 
     requestAnimationFrame(() => {
-      input.focus();
-      const end = input.value.length;
-      input.setSelectionRange(end, end);
+      focusTitleEditor(input);
+      setTimeout(() => {
+        focusTitleEditor(input);
+      }, 0);
     });
   };
 
