@@ -111,6 +111,48 @@ function getCellMeta(cell) {
   return { blockIndex, rowIndex, columnKey };
 }
 
+function getRowByCell(cell) {
+  const meta = getCellMeta(cell);
+  if (!meta) {
+    return null;
+  }
+
+  const block = blocks[meta.blockIndex];
+  const row = block?.rows?.[meta.rowIndex];
+  if (!row) {
+    return null;
+  }
+
+  return { meta, row };
+}
+
+function focusCellEditor(cell) {
+  if (!cell) {
+    return;
+  }
+
+  const columnKey = cell.dataset.columnKey;
+  if (columnKey === "title" && typeof cell.openEditMode === "function") {
+    cell.openEditMode({ keepContent: true });
+    return;
+  }
+
+  if (columnKey === "promoBlockType") {
+    const select = cell.querySelector("select");
+    if (select) {
+      select.focus();
+    }
+    return;
+  }
+
+  if (columnKey === "listo") {
+    const checkbox = cell.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+      checkbox.focus();
+    }
+  }
+}
+
 function moveSelectionDownWithinBlock(cell) {
   const meta = getCellMeta(cell);
   if (!meta) {
@@ -266,19 +308,82 @@ function handleGridEnterKey(event) {
     return;
   }
 
+  if ((event.key === "Delete" || event.key === "Backspace") && selectedCell) {
+    const rowData = getRowByCell(selectedCell);
+    if (!rowData) {
+      return;
+    }
+
+    event.preventDefault();
+    const { row, meta } = rowData;
+
+    if (meta.columnKey === "title") {
+      row.title = "";
+    } else if (meta.columnKey === "promoBlockType") {
+      row.promoBlockType = "";
+      const select = selectedCell.querySelector("select");
+      if (select) {
+        select.value = "";
+      }
+    } else if (meta.columnKey === "listo") {
+      row.listo = false;
+      const checkbox = selectedCell.querySelector('input[type="checkbox"]');
+      if (checkbox) {
+        checkbox.checked = false;
+      }
+    }
+
+    focusCellEditor(selectedCell);
+    return;
+  }
+
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v" && selectedCell.dataset.columnKey === "title") {
     return;
   }
 }
 
 function handleGridPaste(event) {
-  if (editingCell || !selectedCell || selectedCell.dataset.columnKey !== "title" || typeof selectedCell.openEditMode !== "function") {
+  if (editingCell || !selectedCell) {
+    return;
+  }
+
+  const rowData = getRowByCell(selectedCell);
+  if (!rowData) {
     return;
   }
 
   event.preventDefault();
-  const pastedText = event.clipboardData?.getData("text") || "";
-  selectedCell.openEditMode({ replaceWith: pastedText });
+  const pastedText = event.clipboardData?.getData("text/plain") || event.clipboardData?.getData("text") || "";
+  const { row, meta } = rowData;
+
+  if (meta.columnKey === "title") {
+    row.title = pastedText.slice(0, 100);
+    if (typeof selectedCell.openEditMode === "function") {
+      selectedCell.openEditMode({ replaceWith: row.title });
+    }
+    return;
+  }
+
+  if (meta.columnKey === "promoBlockType") {
+    const normalized = pastedText.trim();
+    row.promoBlockType = blockTypeOptions.includes(normalized) ? normalized : "";
+    const select = selectedCell.querySelector("select");
+    if (select) {
+      select.value = row.promoBlockType;
+    }
+    focusCellEditor(selectedCell);
+    return;
+  }
+
+  if (meta.columnKey === "listo") {
+    const normalized = pastedText.trim().toLowerCase();
+    row.listo = ["true", "1", "x", "si", "sí"].includes(normalized);
+    const checkbox = selectedCell.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+      checkbox.checked = row.listo;
+    }
+    focusCellEditor(selectedCell);
+  }
 }
 function insertRow(blockIndex, atIndex) {
   const block = blocks[blockIndex];
