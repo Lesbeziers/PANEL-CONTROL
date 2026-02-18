@@ -74,6 +74,10 @@ let suppressNextGridClick = false;
 let genreTypeBuffer = "";
 let genreTypeBufferTimestamp = 0;
 const GENRE_TYPE_BUFFER_TIMEOUT_MS = 700;
+const MAX_AUTO_INSERT = 50;
+const TOAST_DURATION_MS = 3200;
+let toastElement = null;
+let toastHideTimer = null;
 
 function getTitleOverlayLayer() {
   if (titleOverlayLayer?.isConnected) {
@@ -90,6 +94,36 @@ function getTitleOverlayLayer() {
   gridRoot.appendChild(layer);
   titleOverlayLayer = layer;
   return titleOverlayLayer;
+}
+
+function getToastElement() {
+  if (toastElement?.isConnected) {
+    return toastElement;
+  }
+
+  const toast = document.createElement("div");
+  toast.className = "grid-toast";
+  document.body.appendChild(toast);
+  toastElement = toast;
+  return toastElement;
+}
+
+function showGridToast(message) {
+  if (!message) {
+    return;
+  }
+
+  const toast = getToastElement();
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+
+  if (toastHideTimer) {
+    window.clearTimeout(toastHideTimer);
+  }
+
+  toastHideTimer = window.setTimeout(() => {
+    toast.classList.remove("is-visible");
+  }, TOAST_DURATION_MS);
 }
 
 function setSelectedCell(cell) {
@@ -157,6 +191,64 @@ function getRowByCell(cell) {
 
 function getColumnByKey(columnKey) {
   return columns.find((column) => column.key === columnKey) || null;
+}
+
+function getCopyRangeValues(selection) {
+  if (!selection || copyRangeBlockIndex === null) {
+    return [];
+  }
+
+  const sourceBlock = blocks[copyRangeBlockIndex];
+  if (!sourceBlock?.rows?.length) {
+    return [];
+  }
+
+  const sourceValues = [];
+  for (let rowIndex = selection.r1; rowIndex <= selection.r2; rowIndex += 1) {
+    const sourceRow = sourceBlock.rows[rowIndex];
+    if (!sourceRow) {
+      break;
+    }
+
+    sourceValues.push(getCellRawValue(sourceRow, selection.col));
+  }
+
+  return sourceValues;
+}
+
+function resolveVerticalPasteValues({ rangeSize, clipboardText }) {
+  const normalizedClipboard = `${clipboardText || ""}`.replace(/\r\n/g, "\n");
+  const shouldUseCopyRange =
+    !!copyRange
+    && copyRangeBlockIndex !== null
+    && normalizedClipboard === buildCopyTextFromSelection(copyRange);
+
+  if (shouldUseCopyRange) {
+    const sourceValues = getCopyRangeValues(copyRange);
+    if (sourceValues.length === 1) {
+      return Array.from({ length: rangeSize }, () => sourceValues[0]);
+    }
+
+    if (sourceValues.length > 1) {
+      return sourceValues;
+    }
+  }
+
+  const clipboardLines = normalizedClipboard.split("\n");
+  if (clipboardLines.length > 1 && clipboardLines[clipboardLines.length - 1] === "") {
+    clipboardLines.pop();
+  }
+
+  const normalizedLines = clipboardLines.map((line) => line.split("\t")[0]);
+  if (!normalizedLines.length) {
+    return [];
+  }
+
+  if (normalizedLines.length === 1) {
+    return Array.from({ length: rangeSize }, () => normalizedLines[0]);
+  }
+
+  return normalizedLines;
 }
 
 function parseCellValue(columnKey, rawValue) {
@@ -1304,38 +1396,40 @@ function handleGridPaste(event) {
   const isEditorActive = isEditingElement(document.activeElement);
 
   if (hasVerticalRangeSelection && !isEditorActive) {
-    const pastedText = (event.clipboardData?.getData("text/plain") || "").replace(/\r\n/g, "\n");
-    const clipboardLines = pastedText.split("\n");
-    if (clipboardLines.length > 1 && clipboardLines[clipboardLines.length - 1] === "") {
-      clipboardLines.pop();
-    }
-
-    const normalizedLines = clipboardLines.map((line) => line.split("\t")[0]);
-    if (!normalizedLines.length) {
+    const selection = { ...dragSelection };
+    const rangeSize = selection.r2 - selection.r1 + 1;
+    const pasteValues = resolveVerticalPasteValues({
+      rangeSize,
+      clipboardText: event.clipboardData?.getData("text/plain") || "",
+    });
+    if (!pasteValues.length) {
       return;
     }
 
     event.preventDefault();
 
-    const rangeSize = dragSelection.r2 - dragSelection.r1 + 1;
-    if (normalizedLines.length === 1) {
-      for (let rowIndex = dragSelection.r1; rowIndex <= dragSelection.r2; rowIndex += 1) {
-        const targetCell = document.querySelector(
-          `[data-block-index="${dragSelection.blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${dragSelection.col}"]`
-        );
-        if (targetCell) {
-          setCellValue(targetCell, normalizedLines[0]);
-        }
+    const missingRows = Math.max(0, pasteValues.length - rangeSize);
+    const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
+    if (rowsToInsert > 0) {
+      insertRows(selection.blockIndex, selection.r2 + 1, rowsToInsert);
+      dragSelection = {
+        ...selection,
+        r2: selection.r2 + rowsToInsert,
+      };
+      renderDragSelectionPreview(dragSelection);
+
+      if (missingRows > MAX_AUTO_INSERT) {
+        showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
       }
-      return;
     }
 
-    for (let offset = 0; offset < Math.min(normalizedLines.length, rangeSize); offset += 1) {
+    const maxPasteRows = rangeSize + rowsToInsert;
+    for (let offset = 0; offset < Math.min(pasteValues.length, maxPasteRows); offset += 1) {
       const targetCell = document.querySelector(
-        `[data-block-index="${dragSelection.blockIndex}"][data-row-index="${dragSelection.r1 + offset}"][data-column-key="${dragSelection.col}"]`
+        `[data-block-index="${selection.blockIndex}"][data-row-index="${selection.r1 + offset}"][data-column-key="${selection.col}"]`
       );
       if (targetCell) {
-        setCellValue(targetCell, normalizedLines[offset]);
+        setCellValue(targetCell, pasteValues[offset]);
       }
     }
     return;
@@ -1598,13 +1692,22 @@ function attachGenreCell(cell, row) {
   render();
 }
 function insertRow(blockIndex, atIndex) {
+  insertRows(blockIndex, atIndex, 1);
+}
+
+function insertRows(blockIndex, atIndex, count = 1) {
+  if (!Number.isInteger(count) || count <= 0) {
+    return;
+  }
+
   const block = blocks[blockIndex];
   if (!block) {
     return;
   }
 
   const nextRows = [...block.rows];
-  nextRows.splice(atIndex, 0, newRowForBlock(block.blockType));
+  const rowsToInsert = Array.from({ length: count }, () => newRowForBlock(block.blockType));
+  nextRows.splice(atIndex, 0, ...rowsToInsert);
   blocks[blockIndex] = { ...block, rows: nextRows };
   renderRows();
 }
