@@ -53,6 +53,8 @@ let selectedCellState = null;
 let editingCell = null;
 let titleOverlayLayer = null;
 let genreMenuElement = null;
+let fillHandleElement = null;
+let fillDragState = null;
 let genreTypeBuffer = "";
 let genreTypeBufferTimestamp = 0;
 const GENRE_TYPE_BUFFER_TIMEOUT_MS = 700;
@@ -98,6 +100,8 @@ function setSelectedCell(cell) {
       gridRoot.focus({ preventScroll: true });
     }
   }
+
+  syncFillHandlePosition();
 }
 
 function isSelectedCellState(row, columnKey) {
@@ -523,6 +527,248 @@ function ensureGenreMenuElement() {
   return genreMenuElement;
 }
 
+function getCellRawValue(row, columnKey) {
+  if (!row) {
+    return "";
+  }
+
+  if (columnKey === "listo") {
+    return row.listo ? "true" : "";
+  }
+
+  if (columnKey === "title") {
+    return row.title || "";
+  }
+
+  if (columnKey === "genre") {
+    return row.genre || "";
+  }
+
+  if (columnKey === "id") {
+    return row.id || "";
+  }
+
+  if (DATE_COLUMNS.has(columnKey)) {
+    const { textField } = getDateFieldNames(columnKey);
+    return row[textField] || "";
+  }
+
+  return "";
+}
+
+function computeFillValue(masterValue, targetOffset, columnKey) {
+  const normalizedValue = `${masterValue ?? ""}`;
+  if (!normalizedValue) {
+    return normalizedValue;
+  }
+
+  if (DATE_COLUMNS.has(columnKey) || columnKey === "genre") {
+    return normalizedValue;
+  }
+
+  const seriesMatch = normalizedValue.match(/^(.*?)(\d+)$/);
+  if (!seriesMatch) {
+    return normalizedValue;
+  }
+
+  const prefix = seriesMatch[1];
+  const numberText = seriesMatch[2];
+  const nextNumber = Number.parseInt(numberText, 10) + targetOffset;
+  const paddedNumber = String(nextNumber).padStart(numberText.length, "0");
+  return `${prefix}${paddedNumber}`;
+}
+
+function ensureFillHandleElement() {
+  if (fillHandleElement?.isConnected) {
+    return fillHandleElement;
+  }
+
+  const gridRoot = document.querySelector(".month-block__body-grid");
+  if (!gridRoot) {
+    return null;
+  }
+
+  fillHandleElement = document.createElement("button");
+  fillHandleElement.type = "button";
+  fillHandleElement.className = "fill-handle";
+  fillHandleElement.setAttribute("aria-label", "Autorrelleno hacia abajo");
+  fillHandleElement.setAttribute("tabindex", "-1");
+  fillHandleElement.addEventListener("pointerdown", startFillDrag);
+  gridRoot.appendChild(fillHandleElement);
+  return fillHandleElement;
+}
+
+function clearFillPreview() {
+  document.querySelectorAll(".left-row > div[data-column-key].is-fill-preview").forEach((cell) => {
+    cell.classList.remove("is-fill-preview");
+  });
+}
+
+function updateFillPreview(masterMeta, targetRowIndex) {
+  clearFillPreview();
+  if (targetRowIndex <= masterMeta.rowIndex) {
+    return;
+  }
+
+  for (let rowIndex = masterMeta.rowIndex + 1; rowIndex <= targetRowIndex; rowIndex += 1) {
+    const cell = document.querySelector(
+      `[data-block-index="${masterMeta.blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${masterMeta.columnKey}"]`
+    );
+    if (cell) {
+      cell.classList.add("is-fill-preview");
+    }
+  }
+}
+
+function getFillTargetRowIndexFromPointer(event, masterMeta) {
+  const cells = document.elementsFromPoint(event.clientX, event.clientY)
+    .map((element) => element.closest?.("[data-column-key]"))
+    .filter(Boolean);
+
+  const matchedCell = cells.find(
+    (cell) => cell.dataset.blockIndex === String(masterMeta.blockIndex) && cell.dataset.columnKey === masterMeta.columnKey
+  );
+
+  if (matchedCell) {
+    const nextIndex = Number.parseInt(matchedCell.dataset.rowIndex, 10);
+    return Number.isNaN(nextIndex) ? masterMeta.rowIndex : nextIndex;
+  }
+
+  const block = blocks[masterMeta.blockIndex];
+  const lastRowIndex = Math.max(0, (block?.rows?.length || 1) - 1);
+  const lastCell = document.querySelector(
+    `[data-block-index="${masterMeta.blockIndex}"][data-row-index="${lastRowIndex}"][data-column-key="${masterMeta.columnKey}"]`
+  );
+
+  if (lastCell && event.clientY > lastCell.getBoundingClientRect().bottom) {
+    return lastRowIndex;
+  }
+
+  return masterMeta.rowIndex;
+}
+
+function applyFillDown(masterMeta, targetRowIndex) {
+  if (targetRowIndex <= masterMeta.rowIndex) {
+    return;
+  }
+
+  const masterCell = document.querySelector(
+    `[data-block-index="${masterMeta.blockIndex}"][data-row-index="${masterMeta.rowIndex}"][data-column-key="${masterMeta.columnKey}"]`
+  );
+  const masterData = masterCell ? getRowByCell(masterCell) : null;
+  if (!masterData) {
+    return;
+  }
+
+  const masterValue = getCellRawValue(masterData.row, masterMeta.columnKey);
+  for (let rowIndex = masterMeta.rowIndex + 1; rowIndex <= targetRowIndex; rowIndex += 1) {
+    const targetCell = document.querySelector(
+      `[data-block-index="${masterMeta.blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${masterMeta.columnKey}"]`
+    );
+    if (!targetCell) {
+      continue;
+    }
+
+    const offset = rowIndex - masterMeta.rowIndex;
+    setCellValue(targetCell, computeFillValue(masterValue, offset, masterMeta.columnKey));
+  }
+}
+
+function stopFillDrag(applyChanges) {
+  if (!fillDragState) {
+    return;
+  }
+
+  const { pointerId, masterMeta, previewRowIndex } = fillDragState;
+  const handle = ensureFillHandleElement();
+  if (handle && pointerId !== null && pointerId !== undefined) {
+    handle.releasePointerCapture?.(pointerId);
+  }
+
+  document.removeEventListener("pointermove", handleFillDragMove);
+  document.removeEventListener("pointerup", handleFillDragEnd);
+  document.removeEventListener("pointercancel", handleFillDragCancel);
+
+  clearFillPreview();
+  fillDragState = null;
+
+  if (applyChanges) {
+    applyFillDown(masterMeta, previewRowIndex);
+  }
+
+  syncFillHandlePosition();
+}
+
+function handleFillDragMove(event) {
+  if (!fillDragState) {
+    return;
+  }
+
+  const nextTarget = getFillTargetRowIndexFromPointer(event, fillDragState.masterMeta);
+  const clampedTarget = Math.max(fillDragState.masterMeta.rowIndex, nextTarget);
+  fillDragState.previewRowIndex = clampedTarget;
+  updateFillPreview(fillDragState.masterMeta, clampedTarget);
+}
+
+function handleFillDragEnd(event) {
+  event.preventDefault();
+  stopFillDrag(true);
+}
+
+function handleFillDragCancel() {
+  stopFillDrag(false);
+}
+
+function startFillDrag(event) {
+  if (event.button !== 0 || !selectedCell || editingCell) {
+    return;
+  }
+
+  const masterMeta = getCellMeta(selectedCell);
+  if (!masterMeta) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  const handle = ensureFillHandleElement();
+  handle?.setPointerCapture?.(event.pointerId);
+
+  fillDragState = {
+    pointerId: event.pointerId,
+    masterMeta,
+    previewRowIndex: masterMeta.rowIndex,
+  };
+
+  document.addEventListener("pointermove", handleFillDragMove);
+  document.addEventListener("pointerup", handleFillDragEnd);
+  document.addEventListener("pointercancel", handleFillDragCancel);
+}
+
+function syncFillHandlePosition() {
+  const handle = ensureFillHandleElement();
+  if (!handle) {
+    return;
+  }
+
+  if (!selectedCell || editingCell || fillDragState || !selectedCell.isConnected) {
+    handle.classList.remove("is-visible");
+    return;
+  }
+
+  const gridRoot = document.querySelector(".month-block__body-grid");
+  if (!gridRoot) {
+    handle.classList.remove("is-visible");
+    return;
+  }
+
+  const cellRect = selectedCell.getBoundingClientRect();
+  const rootRect = gridRoot.getBoundingClientRect();
+  handle.style.left = `${cellRect.right - rootRect.left - 5}px`;
+  handle.style.top = `${cellRect.bottom - rootRect.top - 5}px`;
+  handle.classList.add("is-visible");
+}
+
 function handleGridEnterKey(event) {
   const isArrowNavigationKey = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key);
   const isPrintableKey = event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
@@ -738,6 +984,7 @@ function attachDateCell(cell, row, columnKey) {
       }
       cell.classList.remove("is-editing");
       render();
+      syncFillHandlePosition();
     };
 
     const commit = () => {
@@ -757,7 +1004,8 @@ function attachDateCell(cell, row, columnKey) {
       commit: () => input.blur(),
       cancel,
     };
-
+    syncFillHandlePosition();
+    
     requestAnimationFrame(() => {
       input.focus({ preventScroll: true });
       const end = input.value.length;
@@ -858,6 +1106,7 @@ function attachGenreCell(cell, row) {
       window.removeEventListener("resize", positionMenu);
       cell.classList.remove("is-editing");
       render();
+      syncFillHandlePosition();
     };
 
     const handleKeyDown = (event) => {
@@ -913,6 +1162,7 @@ function attachGenreCell(cell, row) {
       cancel,
       handleKeyDown,
     };
+    syncFillHandlePosition();
   };
 
   cell.openEditMode = openEditMode;
@@ -1229,6 +1479,7 @@ function attachTitleCell(cell, row) {
       if (editingCell?.cell === cell) {
         editingCell = null;
       }
+      syncFillHandlePosition();
     };
 
     const commit = () => {
@@ -1266,7 +1517,8 @@ function attachTitleCell(cell, row) {
       commit: () => input.blur(),
       cancel,
     };
-
+    syncFillHandlePosition();
+    
     overlayLayer.appendChild(input);
     window.addEventListener("resize", updateOverlayPosition);
     updateOverlayPosition();
@@ -1324,6 +1576,7 @@ function attachIdTextCell(cell, row) {
         editingCell = null;
       }
       renderReadMode();
+      syncFillHandlePosition();
     };
 
     const commit = () => {
@@ -1343,7 +1596,8 @@ function attachIdTextCell(cell, row) {
       commit: () => input.blur(),
       cancel,
     };
-
+    syncFillHandlePosition();
+    
     requestAnimationFrame(() => {
       input.focus({ preventScroll: true });
       const end = input.value.length;
@@ -1409,6 +1663,11 @@ function renderMonthBlockGrid(root) {
   const gridRoot = root.querySelector(".month-block__body-grid");
   gridRoot?.addEventListener("keydown", handleGridEnterKey);
   gridRoot?.addEventListener("paste", handleGridPaste);
+  ensureFillHandleElement();
+
+  const rightBodyScroll = gridRoot?.querySelector("#right-body-scroll");
+  rightBodyScroll?.addEventListener("scroll", syncFillHandlePosition);
+  window.addEventListener("resize", syncFillHandlePosition);
 }
 
 function renderRows() {
@@ -1418,6 +1677,7 @@ function renderRows() {
   leftBody.innerHTML = "";
   rightBody.innerHTML = "";
   selectedCell = null;
+  clearFillPreview();
   
   blocks.forEach((block, blockIndex) => {
     const groupLeftRow = createLeftRow({
@@ -1508,6 +1768,8 @@ function renderRows() {
       rightBody.appendChild(dayRow);
     });
   });
+
+  syncFillHandlePosition();
 }
 
 renderMonthBlockGrid(document.getElementById("app"));
