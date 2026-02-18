@@ -23,7 +23,8 @@ let rowId = 0;
 function newRow() {
   rowId += 1;
   return {
-    id: `row-${Date.now()}-${rowId}`,
+    rowKey: `row-${Date.now()}-${rowId}`,
+    id: "",
     blockType: "",
     listo: false,
     title: "",
@@ -100,7 +101,7 @@ function setSelectedCell(cell) {
 }
 
 function isSelectedCellState(row, columnKey) {
-  return selectedCellState?.rowId === row.id && selectedCellState?.columnKey === columnKey;
+  return selectedCellState?.rowId === row.rowKey && selectedCellState?.columnKey === columnKey;
 }
 
 function getCellMeta(cell) {
@@ -314,6 +315,9 @@ function setCellValue(cell, rawValue) {
   } else if (meta.columnKey === "genre") {
     row.genre = parsedValue;
     cell.textContent = row.genre;
+  } else if (meta.columnKey === "id") {
+    row.id = parsedValue;
+    cell.textContent = row.id;
   }
 
   return { row, meta };
@@ -339,6 +343,11 @@ function focusCellEditor(cell) {
   }
 
   if (DATE_COLUMNS.has(columnKey) && typeof cell.openEditMode === "function") {
+    cell.openEditMode({ keepContent: true });
+    return;
+  }
+
+  if (columnKey === "id" && typeof cell.openEditMode === "function") {
     cell.openEditMode({ keepContent: true });
   }
 }
@@ -1287,6 +1296,79 @@ function attachTitleCell(cell, row) {
   renderReadMode();
 }
 
+function attachIdTextCell(cell, row) {
+  cell.classList.add("text-cell");
+  cell.tabIndex = 0;
+
+  const renderReadMode = () => {
+    cell.classList.remove("is-editing");
+    cell.textContent = row.id || "";
+  };
+
+  const openEditMode = ({ replaceWith, keepContent = false } = {}) => {
+    if (editingCell?.cell === cell) {
+      return;
+    }
+
+    cell.classList.add("is-editing");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "date-cell__input editor-overlay is-editing";
+    const currentText = row.id || "";
+    input.value = keepContent ? currentText : (replaceWith ?? currentText);
+    cell.textContent = "";
+    cell.appendChild(input);
+
+    const cleanup = () => {
+      if (editingCell?.cell === cell) {
+        editingCell = null;
+      }
+      renderReadMode();
+    };
+
+    const commit = () => {
+      row.id = input.value || "";
+      cleanup();
+    };
+
+    const cancel = () => {
+      cleanup();
+    };
+
+    input.addEventListener("blur", commit, { once: true });
+
+    editingCell = {
+      cell,
+      input,
+      commit: () => input.blur(),
+      cancel,
+    };
+
+    requestAnimationFrame(() => {
+      input.focus({ preventScroll: true });
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    });
+  };
+
+  cell.openEditMode = openEditMode;
+
+  cell.addEventListener("click", () => {
+    setSelectedCell(cell);
+  });
+
+  cell.addEventListener("dblclick", () => {
+    setSelectedCell(cell);
+    openEditMode({ keepContent: true });
+  });
+
+  cell.addEventListener("focus", () => {
+    setSelectedCell(cell);
+  });
+
+  renderReadMode();
+}
+
 function renderMonthBlockGrid(root) {
   root.innerHTML = `
     <section class="month-block" aria-label="MonthBlockGrid Febrero 2026">
@@ -1361,7 +1443,7 @@ function renderRows() {
 
       leftRow.children[1].dataset.blockIndex = String(blockIndex);
       leftRow.children[1].dataset.rowIndex = String(rowIndex);
-      leftRow.children[1].dataset.rowId = row.id;
+      leftRow.children[1].dataset.rowId = row.rowKey;
       leftRow.children[1].dataset.columnKey = "listo";
       if (isSelectedCellState(row, "listo")) {
         selectedCell = leftRow.children[1];
@@ -1370,7 +1452,7 @@ function renderRows() {
 
       leftRow.children[2].dataset.blockIndex = String(blockIndex);
       leftRow.children[2].dataset.rowIndex = String(rowIndex);
-      leftRow.children[2].dataset.rowId = row.id;
+      leftRow.children[2].dataset.rowId = row.rowKey;
       leftRow.children[2].dataset.columnKey = "title";
       leftRow.children[2].tabIndex = 0;
       if (isSelectedCellState(row, "title")) {
@@ -1381,7 +1463,7 @@ function renderRows() {
       attachDateCell(leftRow.children[3], row, "startDate");
       leftRow.children[3].dataset.blockIndex = String(blockIndex);
       leftRow.children[3].dataset.rowIndex = String(rowIndex);
-      leftRow.children[3].dataset.rowId = row.id;
+      leftRow.children[3].dataset.rowId = row.rowKey;
       leftRow.children[3].dataset.columnKey = "startDate";
       if (isSelectedCellState(row, "startDate")) {
         selectedCell = leftRow.children[3];
@@ -1391,7 +1473,7 @@ function renderRows() {
       attachDateCell(leftRow.children[4], row, "endDate");
       leftRow.children[4].dataset.blockIndex = String(blockIndex);
       leftRow.children[4].dataset.rowIndex = String(rowIndex);
-      leftRow.children[4].dataset.rowId = row.id;
+      leftRow.children[4].dataset.rowId = row.rowKey;
       leftRow.children[4].dataset.columnKey = "endDate";
       if (isSelectedCellState(row, "endDate")) {
         selectedCell = leftRow.children[4];
@@ -1401,13 +1483,22 @@ function renderRows() {
       attachGenreCell(leftRow.children[5], row);
       leftRow.children[5].dataset.blockIndex = String(blockIndex);
       leftRow.children[5].dataset.rowIndex = String(rowIndex);
-      leftRow.children[5].dataset.rowId = row.id;
+      leftRow.children[5].dataset.rowId = row.rowKey;
       leftRow.children[5].dataset.columnKey = "genre";
       if (isSelectedCellState(row, "genre")) {
         selectedCell = leftRow.children[5];
         selectedCell.classList.add("is-selected");
       }
 
+      attachIdTextCell(leftRow.children[6], row);
+      leftRow.children[6].dataset.blockIndex = String(blockIndex);
+      leftRow.children[6].dataset.rowIndex = String(rowIndex);
+      leftRow.children[6].dataset.rowId = row.rowKey;
+      leftRow.children[6].dataset.columnKey = "id";
+      if (isSelectedCellState(row, "id")) {
+        selectedCell = leftRow.children[6];
+        selectedCell.classList.add("is-selected");
+      }
       leftRow.children[6].textContent = "";
 
       leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
