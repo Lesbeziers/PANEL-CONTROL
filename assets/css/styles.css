@@ -302,6 +302,20 @@ body {
 .month-block__body-grid button:focus,
 .month-block__body-grid button:focus-visible {
   outline: none !important;
+}
+
+.month-block__body-grid [tabindex]:focus:not(.is-selected):not(.is-editing),
+.month-block__body-grid [tabindex]:focus-visible:not(.is-selected):not(.is-editing),
+.month-block__body-grid .left-row > div[data-column-key]:focus:not(.is-selected):not(.is-editing),
+.month-block__body-grid .left-row > div[data-column-key]:focus-visible:not(.is-selected):not(.is-editing),
+.month-block__body-grid input:focus,
+.month-block__body-grid input:focus-visible,
+.month-block__body-grid textarea:focus,
+.month-block__body-grid textarea:focus-visible,
+.month-block__body-grid select:focus,
+.month-block__body-grid select:focus-visible,
+.month-block__body-grid button:focus,
+.month-block__body-grid button:focus-visible {
   box-shadow: none !important;
 }
 
