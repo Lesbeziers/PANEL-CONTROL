@@ -698,9 +698,11 @@ body {
   gap: 8px;
 }
 
+//*** BOTONES VENTANA ELIMINAR ***
 .delete-confirm-modal__btn {
-  border: 1px solid #c9c9c9;
-  background: #fff;
+  border: 1px solid #333333;
+  background: #333333;
+  color: #ffffff;
   border-radius: 4px;
   padding: 6px 12px;
   font: inherit;
@@ -710,6 +712,7 @@ body {
 
 .delete-confirm-modal__btn:hover,
 .delete-confirm-modal__btn:focus-visible {
-  background: #f3f3f3;
+  background: #333333;
+  color: #ffffff;
   outline: none;
 }
