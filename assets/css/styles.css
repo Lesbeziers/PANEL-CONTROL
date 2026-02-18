@@ -637,3 +637,78 @@ body {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
+.gutter-icon-btn.is-disabled,
+.gutter-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.context-menu__divider {
+  height: 1px;
+  margin: 4px 0;
+  background: #e1e1e1;
+}
+
+.context-menu__item.is-disabled,
+.context-menu__item:disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.delete-modal-open {
+  overflow: hidden;
+}
+
+.delete-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 12000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-confirm-overlay.open {
+  display: flex;
+}
+
+.delete-confirm-modal {
+  min-width: 320px;
+  max-width: min(460px, calc(100vw - 24px));
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  padding: 18px;
+}
+
+.delete-confirm-modal__text {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.delete-confirm-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.delete-confirm-modal__btn {
+  border: 1px solid #c9c9c9;
+  background: #fff;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.delete-confirm-modal__btn:hover,
+.delete-confirm-modal__btn:focus-visible {
+  background: #f3f3f3;
+  outline: none;
+}
