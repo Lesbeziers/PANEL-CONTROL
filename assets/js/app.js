@@ -8,12 +8,24 @@ const columns = [
 ];
 
 const headers = columns.map((column) => column.label);
+const DATE_DEFAULT_MONTH = 2; // TODO: read active month dynamically.
+const DATE_DEFAULT_YEAR = 2026; // TODO: read active year dynamically.
+const DATE_COLUMNS = new Set(["startDate", "endDate"]);
 
 let rowId = 0;
 
 function newRow() {
   rowId += 1;
-  return { id: `row-${Date.now()}-${rowId}`, blockType: "", listo: false, title: "" };
+  return {
+    id: `row-${Date.now()}-${rowId}`,
+    blockType: "",
+    listo: false,
+    title: "",
+    startDateText: "",
+    startDateISO: null,
+    endDateText: "",
+    endDateISO: null,
+  };
 }
 
 function newRowForBlock(blockType) {
@@ -132,7 +144,125 @@ function parseCellValue(columnKey, rawValue) {
     return textValue.slice(0, 100);
   }
 
+    if (DATE_COLUMNS.has(columnKey)) {
+    return `${rawValue ?? ""}`;
+  }
+
   return textValue;
+}
+
+function isLeapYear(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+function daysInMonth(month, year) {
+  if (month === 2) {
+    return isLeapYear(year) ? 29 : 28;
+  }
+  if ([4, 6, 9, 11].includes(month)) {
+    return 30;
+  }
+  return 31;
+}
+
+function formatDateDisplay(day, month, year) {
+  const dd = String(day).padStart(2, "0");
+  const mm = String(month).padStart(2, "0");
+  const yy = String(year).slice(-2);
+  return `${dd}/${mm}/${yy}`;
+}
+
+function formatDateISO(day, month, year) {
+  const dd = String(day).padStart(2, "0");
+  const mm = String(month).padStart(2, "0");
+  return `${year}-${mm}-${dd}`;
+}
+
+function parseDateInput(text, defaultMonth = DATE_DEFAULT_MONTH, defaultYear = DATE_DEFAULT_YEAR) {
+  const originalText = `${text ?? ""}`;
+  const trimmed = originalText.trim();
+  if (!trimmed) {
+    return { ok: true, display: "", iso: null, error: null };
+  }
+
+  const normalizedSeparators = trimmed.replace(/[.-]/g, "/");
+  let day;
+  let month;
+  let year;
+
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split("-").map((chunk) => Number.parseInt(chunk, 10));
+    day = d;
+    month = m;
+    year = y;
+  } else if (/^\d{6}$/.test(trimmed)) {
+    day = Number.parseInt(trimmed.slice(0, 2), 10);
+    month = Number.parseInt(trimmed.slice(2, 4), 10);
+    year = Number.parseInt(trimmed.slice(4, 6), 10) + 2000;
+  } else if (/^\d{1,2}([/.-]\d{1,2}){0,2}$/.test(trimmed)) {
+    const parts = normalizedSeparators.split("/");
+    day = Number.parseInt(parts[0], 10);
+    month = parts[1] ? Number.parseInt(parts[1], 10) : defaultMonth;
+    if (parts[2]) {
+      year = Number.parseInt(parts[2], 10);
+      if (parts[2].length === 2) {
+        year += 2000;
+      }
+    } else {
+      year = defaultYear;
+    }
+  } else if (/^\d{8}$/.test(trimmed)) {
+    day = Number.parseInt(trimmed.slice(0, 2), 10);
+    month = Number.parseInt(trimmed.slice(2, 4), 10);
+    year = Number.parseInt(trimmed.slice(4, 8), 10);
+  } else {
+    return { ok: false, display: originalText, iso: null, error: "Fecha no válida (DD/MM/YY)" };
+  }
+
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
+    return { ok: false, display: originalText, iso: null, error: "Fecha no válida (DD/MM/YY)" };
+  }
+
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(month, year)) {
+    return { ok: false, display: originalText, iso: null, error: "Fecha no válida (DD/MM/YY)" };
+  }
+
+  return {
+    ok: true,
+    display: formatDateDisplay(day, month, year),
+    iso: formatDateISO(day, month, year),
+    error: null,
+  };
+}
+
+function getDateFieldNames(columnKey) {
+  return columnKey === "startDate"
+    ? { textField: "startDateText", isoField: "startDateISO" }
+    : { textField: "endDateText", isoField: "endDateISO" };
+}
+
+function renderDateCell(cell, row, columnKey) {
+  const { textField } = getDateFieldNames(columnKey);
+  const displayValue = row[textField] || "";
+  cell.textContent = displayValue;
+  cell.title = row[`${columnKey}Error`] || "";
+  cell.classList.toggle("has-error", !!row[`${columnKey}Error`]);
+}
+
+function applyDateCellValue(row, columnKey, rawValue, { preserveRawOnInvalid = true } = {}) {
+  const { textField, isoField } = getDateFieldNames(columnKey);
+  const parsed = parseDateInput(rawValue);
+  if (parsed.ok) {
+    row[textField] = parsed.display;
+    row[isoField] = parsed.iso;
+    row[`${columnKey}Error`] = null;
+    return { ok: true, display: row[textField], iso: row[isoField] };
+  }
+
+  row[textField] = preserveRawOnInvalid ? `${rawValue ?? ""}` : "";
+  row[isoField] = null;
+  row[`${columnKey}Error`] = parsed.error;
+  return { ok: false, display: row[textField], iso: null, error: parsed.error };
 }
 
 function setCellValue(cell, rawValue) {
@@ -157,6 +287,9 @@ function setCellValue(cell, rawValue) {
     if (checkbox) {
       checkbox.checked = row.listo;
     }
+  } else if (DATE_COLUMNS.has(meta.columnKey)) {
+    applyDateCellValue(row, meta.columnKey, parsedValue);
+    renderDateCell(cell, row, meta.columnKey);
   }
 
   return { row, meta };
@@ -178,6 +311,11 @@ function focusCellEditor(cell) {
     if (checkbox) {
       checkbox.focus();
     }
+    return;
+  }
+
+  if (DATE_COLUMNS.has(columnKey) && typeof cell.openEditMode === "function") {
+    cell.openEditMode({ keepContent: true });
   }
 }
 
@@ -292,9 +430,17 @@ function handleGridEnterKey(event) {
     }
 
     if (isArrowNavigationKey) {
-      return;
+      event.preventDefault();
+      const currentCell = editingCell.cell;
+      editingCell.commit();
+      const nextCell = getAdjacentCellByArrow(currentCell, event.key);
+      if (nextCell) {
+        setSelectedCell(nextCell);
+        focusCellWithoutEditing(nextCell);
       }
-
+      return;
+    }
+    
     return;
   }
 
@@ -325,13 +471,13 @@ function handleGridEnterKey(event) {
     return;
   }
 
-  if (event.key === "F2" && selectedCell.dataset.columnKey === "title" && typeof selectedCell.openEditMode === "function") {
+  if (event.key === "F2" && typeof selectedCell.openEditMode === "function") {
     event.preventDefault();
     selectedCell.openEditMode({ keepContent: true });
     return;
   }
 
-  if (isPrintableKey && selectedCell.dataset.columnKey === "title" && typeof selectedCell.openEditMode === "function") {
+  if (isPrintableKey && typeof selectedCell.openEditMode === "function") {
     event.preventDefault();
     selectedCell.openEditMode({ replaceWith: event.key });
     return;
@@ -350,7 +496,7 @@ function handleGridEnterKey(event) {
     return;
   }
 
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v" && selectedCell.dataset.columnKey === "title") {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
     return;
   }
 }
@@ -367,9 +513,95 @@ function handleGridPaste(event) {
 
   event.preventDefault();
   const pastedText = event.clipboardData?.getData("text/plain") || "";
-  if (!setCellValue(selectedCell, pastedText)) {
+  const rows = pastedText.split(/\r?\n/).filter((line, index, all) => line !== "" || index < all.length - 1);
+  if (!rows.length) {
     return;
   }
+
+  const startMeta = rowData.meta;
+  rows.forEach((line, offset) => {
+    const targetCell = document.querySelector(
+      `[data-block-index="${startMeta.blockIndex}"][data-row-index="${startMeta.rowIndex + offset}"][data-column-key="${startMeta.columnKey}"]`
+    );
+    if (targetCell) {
+      setCellValue(targetCell, line);
+    }
+  });
+
+  if (DATE_COLUMNS.has(startMeta.columnKey)) {
+    const finalCell = document.querySelector(
+      `[data-block-index="${startMeta.blockIndex}"][data-row-index="${Math.min(startMeta.rowIndex + rows.length - 1, blocks[startMeta.blockIndex].rows.length - 1)}"][data-column-key="${startMeta.columnKey}"]`
+    );
+    if (finalCell) {
+      setSelectedCell(finalCell);
+      focusCellWithoutEditing(finalCell);
+    }
+  }
+}
+
+function attachDateCell(cell, row, columnKey) {
+  cell.classList.add("date-cell");
+  cell.tabIndex = 0;
+
+  const render = () => renderDateCell(cell, row, columnKey);
+
+  const openEditMode = ({ replaceWith, keepContent = false } = {}) => {
+    if (editingCell?.cell === cell) {
+      return;
+    }
+
+    cell.classList.add("is-editing");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "date-cell__input editor-overlay is-editing";
+    const currentText = row[getDateFieldNames(columnKey).textField] || "";
+    input.value = keepContent ? currentText : (replaceWith ?? currentText);
+    cell.textContent = "";
+    cell.appendChild(input);
+
+    const cleanup = () => {
+      if (editingCell?.cell === cell) {
+        editingCell = null;
+      }
+      cell.classList.remove("is-editing");
+      render();
+    };
+
+    const commit = () => {
+      applyDateCellValue(row, columnKey, input.value);
+      cleanup();
+    };
+
+    const cancel = () => {
+      cleanup();
+    };
+
+    input.addEventListener("blur", commit, { once: true });
+
+    editingCell = {
+      cell,
+      input,
+      commit: () => input.blur(),
+      cancel,
+    };
+
+    requestAnimationFrame(() => {
+      input.focus({ preventScroll: true });
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    });
+  };
+
+  cell.openEditMode = openEditMode;
+
+  cell.addEventListener("click", () => setSelectedCell(cell));
+  cell.addEventListener("dblclick", () => {
+    setSelectedCell(cell);
+    openEditMode({ keepContent: true });
+  });
+  cell.addEventListener("focus", () => setSelectedCell(cell));
+
+  render();
 }
 function insertRow(blockIndex, atIndex) {
   const block = blocks[blockIndex];
@@ -828,6 +1060,26 @@ function renderRows() {
       leftRow.children[2].tabIndex = 0;
       if (isSelectedCellState(row, "title")) {
         selectedCell = leftRow.children[2];
+        selectedCell.classList.add("is-selected");
+      }
+
+      attachDateCell(leftRow.children[3], row, "startDate");
+      leftRow.children[3].dataset.blockIndex = String(blockIndex);
+      leftRow.children[3].dataset.rowIndex = String(rowIndex);
+      leftRow.children[3].dataset.rowId = row.id;
+      leftRow.children[3].dataset.columnKey = "startDate";
+      if (isSelectedCellState(row, "startDate")) {
+        selectedCell = leftRow.children[3];
+        selectedCell.classList.add("is-selected");
+      }
+
+      attachDateCell(leftRow.children[4], row, "endDate");
+      leftRow.children[4].dataset.blockIndex = String(blockIndex);
+      leftRow.children[4].dataset.rowIndex = String(rowIndex);
+      leftRow.children[4].dataset.rowId = row.id;
+      leftRow.children[4].dataset.columnKey = "endDate";
+      if (isSelectedCellState(row, "endDate")) {
+        selectedCell = leftRow.children[4];
         selectedCell.classList.add("is-selected");
       }
 
