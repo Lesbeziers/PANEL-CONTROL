@@ -234,6 +234,16 @@ body {
   gap: 8px;
 }
 
+.group-title-cell > span:first-child {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.group-title-cell > span:last-child {
+  font-size: 14px;   /* (Máximo 5 simultáneas) */
+  font-weight: 600;
+}
+
 .title-cell {
   overflow: hidden;
 }
