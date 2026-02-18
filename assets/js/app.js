@@ -54,6 +54,8 @@ let editingCell = null;
 let titleOverlayLayer = null;
 let genreMenuElement = null;
 let fillHandleElement = null;
+let selectionAntsElement = null;
+let selectionAntsResizeObserver = null;
 let fillDragState = null;
 const DRAG_THRESHOLD_PX = 6;
 let dragSelectState = {
@@ -611,6 +613,70 @@ function ensureFillHandleElement() {
   return fillHandleElement;
 }
 
+function ensureSelectionAntsElement() {
+  if (selectionAntsElement?.isConnected) {
+    return selectionAntsElement;
+  }
+
+  const gridRoot = document.querySelector(".month-block__body-grid");
+  if (!gridRoot) {
+    return null;
+  }
+
+  selectionAntsElement = document.createElement("div");
+  selectionAntsElement.className = "selection-ants";
+  selectionAntsElement.setAttribute("aria-hidden", "true");
+  gridRoot.appendChild(selectionAntsElement);
+  return selectionAntsElement;
+}
+
+function hideSelectionAnts() {
+  const ants = ensureSelectionAntsElement();
+  ants?.classList.remove("is-visible");
+}
+
+function syncSelectionAntsPosition() {
+  const ants = ensureSelectionAntsElement();
+  if (!ants) {
+    return;
+  }
+
+  const hasOpenEditor = !!editingCell || !!document.querySelector(".left-row > div.is-editing");
+
+  if (!dragSelection || dragSelection.r2 <= dragSelection.r1 || hasOpenEditor || fillDragState) {
+    ants.classList.remove("is-visible");
+    return;
+  }
+
+  const gridRoot = document.querySelector(".month-block__body-grid");
+  if (!gridRoot) {
+    ants.classList.remove("is-visible");
+    return;
+  }
+
+  const topCell = document.querySelector(
+    `[data-block-index="${dragSelection.blockIndex}"][data-row-index="${dragSelection.r1}"][data-column-key="${dragSelection.col}"]`
+  );
+  const bottomCell = document.querySelector(
+    `[data-block-index="${dragSelection.blockIndex}"][data-row-index="${dragSelection.r2}"][data-column-key="${dragSelection.col}"]`
+  );
+
+  if (!topCell || !bottomCell) {
+    ants.classList.remove("is-visible");
+    return;
+  }
+
+  const containerRect = gridRoot.getBoundingClientRect();
+  const topRect = topCell.getBoundingClientRect();
+  const bottomRect = bottomCell.getBoundingClientRect();
+
+  ants.style.left = `${topRect.left - containerRect.left}px`;
+  ants.style.top = `${topRect.top - containerRect.top}px`;
+  ants.style.width = `${topRect.width}px`;
+  ants.style.height = `${bottomRect.bottom - topRect.top}px`;
+  ants.classList.add("is-visible");
+}
+
 function clearFillPreview() {
   document.querySelectorAll(".left-row > div[data-column-key].is-fill-preview").forEach((cell) => {
     cell.classList.remove("is-fill-preview");
@@ -627,6 +693,7 @@ function renderDragSelectionPreview(selection) {
   clearDragSelectionPreview();
 
   if (!selection) {
+    hideSelectionAnts();
     return;
   }
 
@@ -638,6 +705,8 @@ function renderDragSelectionPreview(selection) {
       cell.classList.add("is-drag-selected");
     }
   }
+
+  syncSelectionAntsPosition();
 }
 
 function getCellFromPointer(event) {
@@ -877,6 +946,7 @@ function stopFillDrag(applyChanges) {
   }
 
   syncFillHandlePosition();
+  syncSelectionAntsPosition();
 }
 
 function handleFillDragMove(event) {
@@ -923,6 +993,7 @@ function startFillDrag(event) {
   document.addEventListener("pointermove", handleFillDragMove);
   document.addEventListener("pointerup", handleFillDragEnd);
   document.addEventListener("pointercancel", handleFillDragCancel);
+  syncSelectionAntsPosition();
 }
 
 function syncFillHandlePosition() {
@@ -947,6 +1018,7 @@ function syncFillHandlePosition() {
   handle.style.left = `${cellRect.right - rootRect.left - 5}px`;
   handle.style.top = `${cellRect.bottom - rootRect.top - 5}px`;
   handle.classList.add("is-visible");
+  syncSelectionAntsPosition();
 }
 
 function handleGridEnterKey(event) {
@@ -1851,8 +1923,25 @@ function renderMonthBlockGrid(root) {
   ensureFillHandleElement();
 
   const rightBodyScroll = gridRoot?.querySelector("#right-body-scroll");
-  rightBodyScroll?.addEventListener("scroll", syncFillHandlePosition);
-  window.addEventListener("resize", syncFillHandlePosition);
+  rightBodyScroll?.addEventListener("scroll", () => {
+    syncFillHandlePosition();
+    syncSelectionAntsPosition();
+  });
+  window.addEventListener("resize", () => {
+    syncFillHandlePosition();
+    syncSelectionAntsPosition();
+  });
+
+  if (gridRoot) {
+    selectionAntsResizeObserver?.disconnect();
+    selectionAntsResizeObserver = new ResizeObserver(() => {
+      syncFillHandlePosition();
+      syncSelectionAntsPosition();
+    });
+    selectionAntsResizeObserver.observe(gridRoot);
+  }
+
+  ensureSelectionAntsElement();
 }
 
 function renderRows() {
@@ -1956,6 +2045,7 @@ function renderRows() {
   });
 
   syncFillHandlePosition();
+  syncSelectionAntsPosition();
 }
 
 renderMonthBlockGrid(document.getElementById("app"));
