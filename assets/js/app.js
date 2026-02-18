@@ -1586,6 +1586,14 @@ function handleGridPaste(event) {
     return;
   }
 
+    const pastedText = event.clipboardData?.getData("text/plain") || "";
+  const clipboardRows = pastedText
+    .split(/\r?\n/)
+    .filter((line, index, all) => line !== "" || index < all.length - 1);
+  if (!clipboardRows.length) {
+    return;
+  }
+
   const hasVerticalRangeSelection =
     !!dragSelection
     && dragSelection.r2 > dragSelection.r1;
@@ -1597,7 +1605,7 @@ function handleGridPaste(event) {
     const rangeSize = selection.r2 - selection.r1 + 1;
     const pasteValues = resolveVerticalPasteValues({
       rangeSize,
-      clipboardText: event.clipboardData?.getData("text/plain") || "",
+      clipboardText: pastedText,
     });
     if (!pasteValues.length) {
       return;
@@ -1638,25 +1646,44 @@ function handleGridPaste(event) {
   }
 
   event.preventDefault();
-  const pastedText = event.clipboardData?.getData("text/plain") || "";
-  const rows = pastedText.split(/\r?\n/).filter((line, index, all) => line !== "" || index < all.length - 1);
-  if (!rows.length) {
+  const startMeta = rowData.meta;
+  const block = blocks[startMeta.blockIndex];
+  if (!block?.rows?.length) {
     return;
   }
 
-  const startMeta = rowData.meta;
-  rows.forEach((line, offset) => {
+  if (clipboardRows.length > 1) {
+    const availableRows = Math.max(0, block.rows.length - startMeta.rowIndex);
+    const missingRows = Math.max(0, clipboardRows.length - availableRows);
+    const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
+    if (rowsToInsert > 0) {
+      insertRows(startMeta.blockIndex, block.rows.length, rowsToInsert);
+
+      if (missingRows > MAX_AUTO_INSERT) {
+        showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
+      }
+    }
+  }
+
+  const currentBlock = blocks[startMeta.blockIndex];
+  const availableRowsAfterInsert = Math.max(0, (currentBlock?.rows?.length || 0) - startMeta.rowIndex);
+  const maxPasteRows = clipboardRows.length > 1
+    ? Math.min(clipboardRows.length, availableRowsAfterInsert)
+    : 1;
+
+  for (let offset = 0; offset < maxPasteRows; offset += 1) {
+    const line = clipboardRows[offset];
     const targetCell = document.querySelector(
       `[data-block-index="${startMeta.blockIndex}"][data-row-index="${startMeta.rowIndex + offset}"][data-column-key="${startMeta.columnKey}"]`
     );
     if (targetCell) {
       setCellValue(targetCell, line);
     }
-  });
+  }
 
   if (DATE_COLUMNS.has(startMeta.columnKey)) {
     const finalCell = document.querySelector(
-      `[data-block-index="${startMeta.blockIndex}"][data-row-index="${Math.min(startMeta.rowIndex + rows.length - 1, blocks[startMeta.blockIndex].rows.length - 1)}"][data-column-key="${startMeta.columnKey}"]`
+      `[data-block-index="${startMeta.blockIndex}"][data-row-index="${Math.min(startMeta.rowIndex + maxPasteRows - 1, blocks[startMeta.blockIndex].rows.length - 1)}"][data-column-key="${startMeta.columnKey}"]`
     );
     if (finalCell) {
       setSelectedCell(finalCell);
