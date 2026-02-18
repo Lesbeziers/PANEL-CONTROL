@@ -698,7 +698,6 @@ body {
   gap: 8px;
 }
 
-//*** BOTONES VENTANA ELIMINAR ***
 .delete-confirm-modal__btn {
   border: 1px solid #333333;
   background: #333333;
