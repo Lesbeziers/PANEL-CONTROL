@@ -288,6 +288,12 @@ body {
   border: 1px solid #fff;
 }
 
+.month-block__body-grid:focus,
+.month-block__body-grid:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 .month-block__body-grid [tabindex]:focus,
 .month-block__body-grid [tabindex]:focus-visible,
 .month-block__body-grid .left-row > div[data-column-key]:focus,
