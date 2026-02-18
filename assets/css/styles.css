@@ -133,11 +133,11 @@ body {
 }
 
 .left-row {
-  grid-template-columns: 46px 64px 442px 82px 82px 140px 74px;
+  grid-template-columns: 46px 64px 432px 82px 82px 140px 84px;
 }
 
 .left-header {
-  grid-template-columns: 64px 442px 82px 82px 140px 74px;
+  grid-template-columns: 64px 432px 82px 82px 140px 84px;
   padding-left: 46px;
 }
 
