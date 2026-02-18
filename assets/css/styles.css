@@ -417,7 +417,9 @@ body {
   position: fixed;
   z-index: 2000;
   display: none;
+  box-sizing: border-box;
   max-height: 220px;
+  overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid #7d7d7d;
   background: #fff;
@@ -437,6 +439,9 @@ body {
   font: inherit;
   font-weight: 400;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .genre-dropdown-menu__option.is-highlighted,
