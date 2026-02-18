@@ -55,6 +55,19 @@ let titleOverlayLayer = null;
 let genreMenuElement = null;
 let fillHandleElement = null;
 let fillDragState = null;
+const DRAG_THRESHOLD_PX = 6;
+let dragSelectState = {
+  pointerDown: false,
+  isDragSelect: false,
+  anchorCell: null,
+  anchorCol: null,
+  anchorBlockIndex: null,
+  anchorRow: null,
+  downX: 0,
+  downY: 0,
+};
+let dragSelection = null;
+let suppressNextGridClick = false;
 let genreTypeBuffer = "";
 let genreTypeBufferTimestamp = 0;
 const GENRE_TYPE_BUFFER_TIMEOUT_MS = 700;
@@ -604,6 +617,173 @@ function clearFillPreview() {
   });
 }
 
+function clearDragSelectionPreview() {
+  document.querySelectorAll(".left-row > div[data-column-key].is-drag-selected").forEach((cell) => {
+    cell.classList.remove("is-drag-selected");
+  });
+}
+
+function renderDragSelectionPreview(selection) {
+  clearDragSelectionPreview();
+
+  if (!selection) {
+    return;
+  }
+
+  for (let rowIndex = selection.r1; rowIndex <= selection.r2; rowIndex += 1) {
+    const cell = document.querySelector(
+      `[data-block-index="${selection.blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${selection.col}"]`
+    );
+    if (cell) {
+      cell.classList.add("is-drag-selected");
+    }
+  }
+}
+
+function getCellFromPointer(event) {
+  const directCell = event.target?.closest?.("[data-column-key]");
+  if (directCell) {
+    return directCell;
+  }
+
+  const hoveredCells = document.elementsFromPoint(event.clientX, event.clientY)
+    .map((element) => element.closest?.("[data-column-key]"))
+    .filter(Boolean);
+
+  return hoveredCells[0] || null;
+}
+
+function updateDragSelectionFromPointer(event) {
+  if (!dragSelectState.pointerDown || !dragSelectState.isDragSelect) {
+    return;
+  }
+
+  const hoverCell = getCellFromPointer(event);
+  const hoverMeta = getCellMeta(hoverCell);
+  if (!hoverMeta || hoverMeta.blockIndex !== dragSelectState.anchorBlockIndex) {
+    return;
+  }
+
+  const r1 = Math.min(dragSelectState.anchorRow, hoverMeta.rowIndex);
+  const r2 = Math.max(dragSelectState.anchorRow, hoverMeta.rowIndex);
+  dragSelection = {
+    blockIndex: dragSelectState.anchorBlockIndex,
+    col: dragSelectState.anchorCol,
+    r1,
+    r2,
+  };
+
+  renderDragSelectionPreview(dragSelection);
+}
+
+function resetDragSelectState() {
+  dragSelectState = {
+    pointerDown: false,
+    isDragSelect: false,
+    anchorCell: null,
+    anchorCol: null,
+    anchorBlockIndex: null,
+    anchorRow: null,
+    downX: 0,
+    downY: 0,
+  };
+}
+
+function handleGridPointerDown(event) {
+  if (event.button !== 0 || fillDragState || editingCell) {
+    return;
+  }
+
+  if (event.target.closest(".fill-handle")) {
+    return;
+  }
+
+  const cell = event.target.closest(".left-row > div[data-column-key]");
+  if (!cell) {
+    return;
+  }
+
+  const meta = getCellMeta(cell);
+  if (!meta) {
+    return;
+  }
+
+  dragSelection = null;
+  clearDragSelectionPreview();
+
+  dragSelectState = {
+    pointerDown: true,
+    isDragSelect: false,
+    anchorCell: cell,
+    anchorCol: meta.columnKey,
+    anchorBlockIndex: meta.blockIndex,
+    anchorRow: meta.rowIndex,
+    downX: event.clientX,
+    downY: event.clientY,
+  };
+}
+
+function handleGridPointerMove(event) {
+  if (!dragSelectState.pointerDown || fillDragState) {
+    return;
+  }
+
+  if (!dragSelectState.isDragSelect) {
+    const dx = event.clientX - dragSelectState.downX;
+    const dy = event.clientY - dragSelectState.downY;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= DRAG_THRESHOLD_PX) {
+      return;
+    }
+
+    dragSelectState.isDragSelect = true;
+    dragSelection = {
+      blockIndex: dragSelectState.anchorBlockIndex,
+      col: dragSelectState.anchorCol,
+      r1: dragSelectState.anchorRow,
+      r2: dragSelectState.anchorRow,
+    };
+    renderDragSelectionPreview(dragSelection);
+  }
+
+  updateDragSelectionFromPointer(event);
+}
+
+function handleGridPointerUp() {
+  if (!dragSelectState.pointerDown) {
+    return;
+  }
+
+  if (dragSelectState.isDragSelect) {
+    suppressNextGridClick = true;
+    setSelectedCell(dragSelectState.anchorCell);
+    setTimeout(() => {
+      suppressNextGridClick = false;
+    }, 0);
+  }
+
+  resetDragSelectState();
+}
+
+function handleGridPointerCancel() {
+  if (!dragSelectState.pointerDown) {
+    return;
+  }
+  resetDragSelectState();
+}
+
+function handleGridClickCapture(event) {
+  if (!suppressNextGridClick) {
+    return;
+  }
+
+  if (event.target.closest(".left-row > div[data-column-key]")) {
+    event.preventDefault();
+    event.stopPropagation();
+    suppressNextGridClick = false;
+  }
+}
+
 function updateFillPreview(masterMeta, targetRowIndex) {
   clearFillPreview();
   if (targetRowIndex <= masterMeta.rowIndex) {
@@ -751,7 +931,7 @@ function syncFillHandlePosition() {
     return;
   }
 
-  if (!selectedCell || editingCell || fillDragState || !selectedCell.isConnected) {
+  if (!selectedCell || editingCell || fillDragState || dragSelectState.isDragSelect || !selectedCell.isConnected) {
     handle.classList.remove("is-visible");
     return;
   }
@@ -1663,6 +1843,11 @@ function renderMonthBlockGrid(root) {
   const gridRoot = root.querySelector(".month-block__body-grid");
   gridRoot?.addEventListener("keydown", handleGridEnterKey);
   gridRoot?.addEventListener("paste", handleGridPaste);
+  gridRoot?.addEventListener("pointerdown", handleGridPointerDown);
+  document.addEventListener("pointermove", handleGridPointerMove);
+  document.addEventListener("pointerup", handleGridPointerUp);
+  document.addEventListener("pointercancel", handleGridPointerCancel);
+  gridRoot?.addEventListener("click", handleGridClickCapture, true);
   ensureFillHandleElement();
 
   const rightBodyScroll = gridRoot?.querySelector("#right-body-scroll");
@@ -1678,6 +1863,7 @@ function renderRows() {
   rightBody.innerHTML = "";
   selectedCell = null;
   clearFillPreview();
+  renderDragSelectionPreview(dragSelection);
   
   blocks.forEach((block, blockIndex) => {
     const groupLeftRow = createLeftRow({
