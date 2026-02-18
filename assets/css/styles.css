@@ -343,7 +343,7 @@ body {
   margin: 0;
   font: inherit;
   color: inherit;
-  caret-color: #111;
+  caret-color: #000;
   cursor: text;
 }
 
