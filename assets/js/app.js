@@ -51,6 +51,7 @@ let selectedCell = null;
 let selectedCellState = null;
 let editingCell = null;
 let titleOverlayLayer = null;
+let genreMenuElement = null;
 let genreTypeBuffer = "";
 let genreTypeBufferTimestamp = 0;
 const GENRE_TYPE_BUFFER_TIMEOUT_MS = 700;
@@ -501,12 +502,31 @@ function isEditingElement(element) {
   return tagName === "input" || tagName === "textarea" || tagName === "select" || element.isContentEditable;
 }
 
+function ensureGenreMenuElement() {
+  if (genreMenuElement?.isConnected) {
+    return genreMenuElement;
+  }
+
+  genreMenuElement = document.createElement("div");
+  genreMenuElement.className = "genre-dropdown-menu";
+  genreMenuElement.setAttribute("role", "listbox");
+  document.body.appendChild(genreMenuElement);
+  return genreMenuElement;
+}
+
 function handleGridEnterKey(event) {
   const isArrowNavigationKey = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key);
   const isPrintableKey = event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
   const hasSelectedCell = !!selectedCell && !!getCellMeta(selectedCell);
 
   if (editingCell) {
+    if (editingCell.type === "select" && typeof editingCell.handleKeyDown === "function") {
+      const handled = editingCell.handleKeyDown(event);
+      if (handled) {
+        return;
+      }
+    }
+
     if (event.key === "Tab") {
       event.preventDefault();
       const currentCell = editingCell.cell;
@@ -584,6 +604,11 @@ function handleGridEnterKey(event) {
 
   if (event.key === "Enter") {
     event.preventDefault();
+    if (selectedCell.dataset.columnKey === "genre" && typeof selectedCell.openEditMode === "function") {
+      selectedCell.openEditMode({ keepContent: true });
+      return;
+    }
+
     const nextSelection = moveSelectionDownWithinBlock(selectedCell);
     focusCellWithoutEditing(nextSelection.cell);
     return;
@@ -761,37 +786,16 @@ function attachGenreCell(cell, row) {
       return;
     }
 
+    const menu = ensureGenreMenuElement();
     cell.classList.add("is-editing");
-    const select = document.createElement("select");
-    select.className = "genre-cell__select editor-overlay is-editing";
-
-    const emptyOption = document.createElement("option");
-    emptyOption.value = "";
-    emptyOption.textContent = "";
-    select.appendChild(emptyOption);
-
-    column.options.forEach((option) => {
-      const optionElement = document.createElement("option");
-      optionElement.value = option;
-      optionElement.textContent = option;
-      select.appendChild(optionElement);
-    });
-
-    select.value = keepContent ? row.genre || "" : (replaceWith ?? row.genre ?? "");
+    const currentValue = keepContent ? row.genre || "" : (replaceWith ?? row.genre ?? "");
+    let highlightedIndex = Math.max(0, column.options.findIndex((option) => option === currentValue));
     const originalValue = row.genre || "";
     let cancelled = false;
 
-    const cleanup = () => {
-      if (editingCell?.cell === cell) {
-        editingCell = null;
-      }
-      cell.classList.remove("is-editing");
-      render();
-    };
-
     const commit = () => {
       if (!cancelled) {
-        row.genre = parseCellValue("genre", select.value);
+        row.genre = parseCellValue("genre", row.genre);
       }
       cleanup();
     };
@@ -802,29 +806,111 @@ function attachGenreCell(cell, row) {
       cleanup();
     };
 
-    select.addEventListener("blur", commit, { once: true });
+    const renderOptions = () => {
+      menu.innerHTML = "";
+      column.options.forEach((option, index) => {
+        const optionElement = document.createElement("button");
+        optionElement.type = "button";
+        optionElement.className = "genre-dropdown-menu__option";
+        if (option === currentValue) {
+          optionElement.classList.add("is-selected");
+        }
+        if (index === highlightedIndex) {
+          optionElement.classList.add("is-highlighted");
+        }
+        optionElement.textContent = option;
+        optionElement.setAttribute("role", "option");
+        optionElement.setAttribute("aria-selected", option === currentValue ? "true" : "false");
+        optionElement.addEventListener("mousedown", (event) => event.preventDefault());
+        optionElement.addEventListener("click", () => {
+          row.genre = option;
+          commit();
+        });
+        menu.appendChild(optionElement);
+      });
+    };
 
-    cell.textContent = "";
-    cell.appendChild(select);
+    const positionMenu = () => {
+      const cellRect = cell.getBoundingClientRect();
+      menu.style.left = `${cellRect.left}px`;
+      menu.style.top = `${cellRect.bottom - 1}px`;
+      menu.style.width = `${cellRect.width}px`;
+      menu.classList.add("open");
+    };
+
+    const cleanup = () => {
+      if (editingCell?.cell === cell) {
+        editingCell = null;
+      }
+      document.removeEventListener("mousedown", handlePointerDownOutside);
+      menu.classList.remove("open");
+      window.removeEventListener("resize", positionMenu);
+      cell.classList.remove("is-editing");
+      render();
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        highlightedIndex = Math.min(column.options.length - 1, highlightedIndex + 1);
+        renderOptions();
+        return true;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        highlightedIndex = Math.max(0, highlightedIndex - 1);
+        renderOptions();
+        return true;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        row.genre = column.options[highlightedIndex] || "";
+        commit();
+        const nextSelection = moveSelectionDownWithinBlock(cell);
+        focusCellWithoutEditing(nextSelection.cell);
+        return true;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancel();
+        focusCellWithoutEditing(cell);
+        return true;
+      }
+
+      return false;
+    };
+
+    const handlePointerDownOutside = (event) => {
+      if (!menu.contains(event.target) && !cell.contains(event.target)) {
+        commit();
+      }
+    };
+
+    renderOptions();
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    document.addEventListener("mousedown", handlePointerDownOutside);
 
     editingCell = {
       cell,
-      input: select,
+      input: menu,
       type: "select",
-      commit: () => select.blur(),
+      commit,
       cancel,
+      handleKeyDown,
     };
-
-    requestAnimationFrame(() => {
-      select.focus({ preventScroll: true });
-    });
   };
 
   cell.openEditMode = openEditMode;
-  cell.addEventListener("click", () => setSelectedCell(cell));
-  cell.addEventListener("dblclick", () => {
+  cell.addEventListener("click", () => {
+    const wasSelected = selectedCell === cell;
     setSelectedCell(cell);
-    openEditMode({ keepContent: true });
+    if (wasSelected) {
+      openEditMode({ keepContent: true });
+    }
   });
   cell.addEventListener("focus", () => setSelectedCell(cell));
 
@@ -1320,7 +1406,7 @@ function renderRows() {
         selectedCell.classList.add("is-selected");
       }
 
-      leftRow.children[6].textContent = row.id || "";
+      leftRow.children[6].textContent = "";
 
       leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
       dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
