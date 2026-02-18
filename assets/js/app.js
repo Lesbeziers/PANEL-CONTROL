@@ -78,6 +78,61 @@ const MAX_AUTO_INSERT = 50;
 const TOAST_DURATION_MS = 3200;
 let toastElement = null;
 let toastHideTimer = null;
+let deleteConfirmElement = null;
+let deleteConfirmState = null;
+
+function getDeleteTarget(preferredBlockIndex = null) {
+  if (
+    dragSelection
+    && Number.isInteger(dragSelection.blockIndex)
+    && Number.isInteger(dragSelection.r1)
+    && Number.isInteger(dragSelection.r2)
+  ) {
+    if (preferredBlockIndex === null || dragSelection.blockIndex === preferredBlockIndex) {
+      const startRow = Math.min(dragSelection.r1, dragSelection.r2);
+      const endRow = Math.max(dragSelection.r1, dragSelection.r2);
+      return {
+        blockIndex: dragSelection.blockIndex,
+        startRow,
+        endRow,
+        count: endRow - startRow + 1,
+      };
+    }
+  }
+
+  const activeMeta = getCellMeta(selectedCell);
+  if (!activeMeta) {
+    return null;
+  }
+
+  if (preferredBlockIndex !== null && activeMeta.blockIndex !== preferredBlockIndex) {
+    return null;
+  }
+
+  return {
+    blockIndex: activeMeta.blockIndex,
+    startRow: activeMeta.rowIndex,
+    endRow: activeMeta.rowIndex,
+    count: 1,
+  };
+}
+
+function canDeleteRows(preferredBlockIndex = null) {
+  return !!getDeleteTarget(preferredBlockIndex);
+}
+
+function refreshDeleteControls() {
+  document.querySelectorAll('.gutter-icon-btn[data-action="delete-rows"]').forEach((button) => {
+    const blockIndex = Number.parseInt(button.dataset.blockIndex, 10);
+    const enabled = canDeleteRows(Number.isNaN(blockIndex) ? null : blockIndex);
+    button.disabled = !enabled;
+    button.classList.toggle("is-disabled", !enabled);
+  });
+
+  if (menuElement?.classList.contains("open")) {
+    updateContextMenuDeleteState();
+  }
+}
 
 function getTitleOverlayLayer() {
   if (titleOverlayLayer?.isConnected) {
@@ -126,6 +181,129 @@ function showGridToast(message) {
   }, TOAST_DURATION_MS);
 }
 
+function closeDeleteConfirmModal({ shouldRestoreFocus = true } = {}) {
+  if (!deleteConfirmElement) {
+    deleteConfirmState = null;
+    return;
+  }
+
+  deleteConfirmElement.classList.remove("open");
+  deleteConfirmElement.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("delete-modal-open");
+
+  const triggerElement = deleteConfirmState?.triggerElement;
+  deleteConfirmState = null;
+
+  if (shouldRestoreFocus && triggerElement?.isConnected) {
+    triggerElement.focus({ preventScroll: true });
+  }
+}
+
+function handleDeleteConfirmKeydown(event) {
+  if (!deleteConfirmState || !deleteConfirmElement?.classList.contains("open")) {
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeDeleteConfirmModal();
+    return;
+  }
+
+  if (event.key !== "Tab") {
+    return;
+  }
+
+  const focusable = [...deleteConfirmElement.querySelectorAll('button:not([disabled])')];
+  if (!focusable.length) {
+    event.preventDefault();
+    return;
+  }
+
+  const currentIndex = focusable.indexOf(document.activeElement);
+  const direction = event.shiftKey ? -1 : 1;
+  const nextIndex = currentIndex === -1
+    ? 0
+    : (currentIndex + direction + focusable.length) % focusable.length;
+
+  event.preventDefault();
+  focusable[nextIndex].focus();
+}
+
+function ensureDeleteConfirmElement() {
+  if (deleteConfirmElement) {
+    return deleteConfirmElement;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "delete-confirm-overlay";
+  overlay.setAttribute("aria-hidden", "true");
+  overlay.innerHTML = `
+    <div class="delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+      <p id="delete-confirm-title" class="delete-confirm-modal__text"></p>
+      <div class="delete-confirm-modal__actions">
+        <button type="button" class="delete-confirm-modal__btn" data-action="ok">OK</button>
+        <button type="button" class="delete-confirm-modal__btn" data-action="cancel">Cancelar</button>
+      </div>
+    </div>
+  `;
+
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+
+  overlay.addEventListener("keydown", handleDeleteConfirmKeydown);
+
+  overlay.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-action]")?.dataset?.action;
+    if (!action) {
+      return;
+    }
+
+    if (action === "cancel") {
+      closeDeleteConfirmModal();
+      return;
+    }
+
+    if (action === "ok") {
+      const target = deleteConfirmState?.target;
+      closeDeleteConfirmModal({ shouldRestoreFocus: false });
+      executeDeleteRows(target);
+    }
+  });
+
+  document.body.appendChild(overlay);
+  deleteConfirmElement = overlay;
+  return deleteConfirmElement;
+}
+
+function openDeleteConfirmModal(target, triggerElement = document.activeElement) {
+  if (!target) {
+    return;
+  }
+
+  closeContextMenu();
+
+  const overlay = ensureDeleteConfirmElement();
+  const title = overlay.querySelector(".delete-confirm-modal__text");
+  title.textContent = `Vas a eliminar ${target.count} filas`;
+
+  deleteConfirmState = {
+    target,
+    triggerElement: triggerElement instanceof HTMLElement ? triggerElement : null,
+  };
+
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("delete-modal-open");
+
+  const okButton = overlay.querySelector('[data-action="ok"]');
+  okButton?.focus({ preventScroll: true });
+}
+
 function setSelectedCell(cell) {
   if (selectedCell && selectedCell !== cell && selectedCell.isConnected) {
     selectedCell.classList.remove("is-selected");
@@ -152,6 +330,7 @@ function setSelectedCell(cell) {
   }
 
   syncFillHandlePosition();
+  refreshDeleteControls();
 }
 
 function isSelectedCellState(row, columnKey) {
@@ -858,6 +1037,7 @@ function renderDragSelectionPreview(selection) {
   clearDragSelectionPreview();
 
   if (!selection) {
+    refreshDeleteControls();
     return;
   }
 
@@ -869,6 +1049,8 @@ function renderDragSelectionPreview(selection) {
       cell.classList.add("is-drag-selected");
     }
   }
+
+  refreshDeleteControls();
 }
 
 function getCellFromPointer(event) {
@@ -1320,6 +1502,21 @@ function handleGridEnterKey(event) {
     return;
   }
 
+    if ((event.ctrlKey || event.metaKey) && (event.key === "Delete" || event.key === "Backspace")) {
+    if (isEditingElement(document.activeElement)) {
+      return;
+    }
+
+    const target = getDeleteTarget();
+    if (!target) {
+      return;
+    }
+
+    event.preventDefault();
+    openDeleteConfirmModal(target, selectedCell);
+    return;
+  }
+
   if (isPrintableKey && typeof selectedCell.openEditMode === "function") {
     const column = getColumnByKey(selectedCell.dataset.columnKey);
     if (column?.cellType === "select") {
@@ -1712,6 +1909,146 @@ function insertRows(blockIndex, atIndex, count = 1) {
   renderRows();
 }
 
+function deleteRowsInBlock(blockIndex, startRow, endRow) {
+  const block = blocks[blockIndex];
+  if (!block?.rows?.length) {
+    return null;
+  }
+
+  const safeStart = Math.max(0, Math.min(startRow, endRow));
+  const safeEnd = Math.min(block.rows.length - 1, Math.max(startRow, endRow));
+  if (safeEnd < safeStart) {
+    return null;
+  }
+
+  const hasStructuralRow = block.rows
+    .slice(safeStart, safeEnd + 1)
+    .some((row) => row?.isHeader || row?.isStructural);
+  if (hasStructuralRow) {
+    return null;
+  }
+
+  const removeCount = safeEnd - safeStart + 1;
+  const nextRows = [...block.rows];
+  nextRows.splice(safeStart, removeCount);
+
+  if (!nextRows.length) {
+    nextRows.push(newRowForBlock(block.blockType));
+  }
+
+  blocks[blockIndex] = { ...block, rows: nextRows };
+
+  return {
+    removedStart: safeStart,
+    removedEnd: safeEnd,
+    removeCount,
+    lastRowIndex: nextRows.length - 1,
+  };
+}
+
+function createSelectionState(blockIndex, rowIndex, columnKey) {
+  return {
+    blockIndex,
+    rowIndex,
+    columnKey,
+  };
+}
+
+function normalizeSelectionAfterDelete(blockIndex, deleteInfo) {
+  const block = blocks[blockIndex];
+  const activeMeta = getCellMeta(selectedCell);
+
+  if (dragSelection && dragSelection.blockIndex === blockIndex) {
+    const selectionStartsBeforeDelete = dragSelection.r1 < deleteInfo.removedStart;
+    const selectionEndsBeforeDelete = dragSelection.r2 < deleteInfo.removedStart;
+    const selectionStartsAfterDelete = dragSelection.r1 > deleteInfo.removedEnd;
+
+    if (selectionEndsBeforeDelete) {
+      // Keep selection as-is.
+    } else if (selectionStartsAfterDelete) {
+      dragSelection = {
+        ...dragSelection,
+        r1: Math.max(0, dragSelection.r1 - deleteInfo.removeCount),
+        r2: Math.max(0, dragSelection.r2 - deleteInfo.removeCount),
+      };
+    } else {
+      dragSelection = null;
+    }
+
+    if (selectionStartsBeforeDelete && dragSelection && dragSelection.r2 < dragSelection.r1) {
+      dragSelection = null;
+    }
+  }
+
+  if (copyRange && copyRangeBlockIndex === blockIndex) {
+    const intersects = !(copyRange.r2 < deleteInfo.removedStart || copyRange.r1 > deleteInfo.removedEnd);
+    if (intersects) {
+      setCopyRange(null);
+    } else if (copyRange.r1 > deleteInfo.removedEnd) {
+      setCopyRange(
+        {
+          ...copyRange,
+          r1: Math.max(0, copyRange.r1 - deleteInfo.removeCount),
+          r2: Math.max(0, copyRange.r2 - deleteInfo.removeCount),
+        },
+        copyRangeBlockIndex
+      );
+    }
+  }
+
+  let nextSelection = null;
+  if (activeMeta && activeMeta.blockIndex === blockIndex) {
+    if (activeMeta.rowIndex < deleteInfo.removedStart) {
+      nextSelection = createSelectionState(blockIndex, activeMeta.rowIndex, activeMeta.columnKey);
+    } else if (activeMeta.rowIndex > deleteInfo.removedEnd) {
+      nextSelection = createSelectionState(
+        blockIndex,
+        Math.max(0, activeMeta.rowIndex - deleteInfo.removeCount),
+        activeMeta.columnKey
+      );
+    } else {
+      nextSelection = createSelectionState(
+        blockIndex,
+        Math.min(deleteInfo.removedStart, deleteInfo.lastRowIndex),
+        activeMeta.columnKey
+      );
+    }
+  } else if (selectedCellState) {
+    nextSelection = null;
+  }
+
+  renderRows();
+
+  if (nextSelection) {
+    const nextCell = document.querySelector(
+      `[data-block-index="${nextSelection.blockIndex}"][data-row-index="${nextSelection.rowIndex}"][data-column-key="${nextSelection.columnKey}"]`
+    );
+    if (nextCell) {
+      setSelectedCell(nextCell);
+      focusCellWithoutEditing(nextCell);
+    } else {
+      setSelectedCell(null);
+    }
+  } else {
+    setSelectedCell(null);
+  }
+
+  renderDragSelectionPreview(dragSelection);
+}
+
+function executeDeleteRows(target) {
+  if (!target) {
+    return;
+  }
+
+  const deleteInfo = deleteRowsInBlock(target.blockIndex, target.startRow, target.endRow);
+  if (!deleteInfo) {
+    return;
+  }
+
+  normalizeSelectionAfterDelete(target.blockIndex, deleteInfo);
+}
+
 function ensureContextMenuElement() {
   if (menuElement) {
     return menuElement;
@@ -1723,6 +2060,8 @@ function ensureContextMenuElement() {
   menuElement.innerHTML = `
     <button type="button" class="context-menu__item" data-action="above" role="menuitem">Insertar fila encima</button>
     <button type="button" class="context-menu__item" data-action="below" role="menuitem">Insertar fila debajo</button>
+    <div class="context-menu__divider" role="separator"></div>
+    <button type="button" class="context-menu__item" data-action="delete" role="menuitem">Eliminar filas</button>
   `;
 
   menuElement.addEventListener("click", (event) => {
@@ -1733,15 +2072,43 @@ function ensureContextMenuElement() {
 
     if (target.dataset.action === "above") {
       insertRow(contextMenu.blockIndex, contextMenu.rowIndex);
-    } else {
-      insertRow(contextMenu.blockIndex, contextMenu.rowIndex + 1);
+      closeContextMenu();
+      return;
     }
 
-    closeContextMenu();
+    if (target.dataset.action === "below") {
+      insertRow(contextMenu.blockIndex, contextMenu.rowIndex + 1);
+      closeContextMenu();
+      return;
+    }
+
+    if (target.dataset.action === "delete") {
+      const deleteTarget = getDeleteTarget(contextMenu.blockIndex);
+      if (!deleteTarget) {
+        return;
+      }
+      openDeleteConfirmModal(deleteTarget);
+      closeContextMenu();
+    }
   });
 
   document.body.appendChild(menuElement);
   return menuElement;
+}
+
+function updateContextMenuDeleteState() {
+  if (!menuElement) {
+    return;
+  }
+
+  const deleteItem = menuElement.querySelector('[data-action="delete"]');
+  if (!deleteItem) {
+    return;
+  }
+
+  const enabled = canDeleteRows(contextMenu.blockIndex);
+  deleteItem.disabled = !enabled;
+  deleteItem.classList.toggle("is-disabled", !enabled);
 }
 
 function handleOutsidePointer(event) {
@@ -1780,12 +2147,13 @@ function openContextMenu(event, blockIndex, rowIndex) {
   menu.classList.add("open");
   menu.style.left = `${contextMenu.x}px`;
   menu.style.top = `${contextMenu.y}px`;
-
+  updateContextMenuDeleteState();
+  
   document.addEventListener("mousedown", handleOutsidePointer);
   document.addEventListener("keydown", handleMenuEscape);
 }
 
-function createLeftRow({ group = false, cells = [], onAddRow } = {}) {
+function createLeftRow({ group = false, cells = [], onAddRow, onDeleteRows, canDeleteRowsInGroup = false, groupBlockIndex = null } = {}) {
   const leftRow = document.createElement("div");
   leftRow.className = `left-row ${group ? "group" : ""}`;
 
@@ -1809,9 +2177,21 @@ function createLeftRow({ group = false, cells = [], onAddRow } = {}) {
         const removeBtn = document.createElement("button");
         removeBtn.className = "gutter-icon-btn";
         removeBtn.type = "button";
-        removeBtn.setAttribute("aria-label", "Eliminar fila");
+        removeBtn.setAttribute("aria-label", "Eliminar filas");
         removeBtn.textContent = "−";
-
+        removeBtn.dataset.action = "delete-rows";
+        if (groupBlockIndex !== null) {
+          removeBtn.dataset.blockIndex = String(groupBlockIndex);
+        }
+        removeBtn.disabled = !canDeleteRowsInGroup;
+        removeBtn.classList.toggle("is-disabled", !canDeleteRowsInGroup);
+        removeBtn.addEventListener("click", () => {
+          if (removeBtn.disabled || typeof onDeleteRows !== "function") {
+            return;
+          }
+          onDeleteRows(removeBtn);
+        });
+        
         cell.append(addBtn, removeBtn);
       }
     } else if (group && i === 2 && cells[i] && typeof cells[i] === "object") {
@@ -2223,6 +2603,15 @@ function renderRows() {
       group: true,
       cells: ["", "", { left: block.blockType.toUpperCase(), right: "(Máximo 5 simultáneas)" }, "", "", "", ""],
       onAddRow: () => insertRow(blockIndex, 0),
+      canDeleteRowsInGroup: canDeleteRows(blockIndex),
+      groupBlockIndex: blockIndex,
+      onDeleteRows: (triggerElement) => {
+        const target = getDeleteTarget(blockIndex);
+        if (!target) {
+          return;
+        }
+        openDeleteConfirmModal(target, triggerElement);
+      },
     });
     const groupDayRow = createDayRow(true);
 
