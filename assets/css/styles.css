@@ -293,7 +293,7 @@ body {
   border: 2px solid #00b050;
   background-image: repeating-linear-gradient(
     45deg,
-    rgba(0, 176, 80, 0.2) 0 6px,
+    rgba(110, 110, 110, 0.2) 0 6px,
     transparent 6px 12px
   );
   background-size: 16px 16px;
