@@ -49,6 +49,7 @@ let blocks = [
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
 let selectedCell = null;
+let editingCell = null;
 let titleOverlayLayer = null;
 
 function getTitleOverlayLayer() {
@@ -181,46 +182,45 @@ function isEditingElement(element) {
   return tagName === "input" || tagName === "textarea" || tagName === "select" || element.isContentEditable;
 }
 
-function focusAndEditCell(cell) {
-  if (!cell) {
-    return;
-  }
-
-  requestAnimationFrame(() => {
-    cell.focus();
-    if (cell.dataset.columnKey === "title" && typeof cell.openEditMode === "function") {
-      cell.openEditMode();
-      return;
-    }
-
-    if (cell.dataset.columnKey === "promoBlockType") {
-      const select = cell.querySelector("select");
-      if (select) {
-        select.focus();
-      }
-    }
-  });
-}
-
 function handleGridEnterKey(event) {
   const isArrowNavigationKey = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key);
-  if (event.key !== "Enter" && !isArrowNavigationKey) {
+  const isPrintableKey = event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+  const hasSelectedCell = !!selectedCell && !!getCellMeta(selectedCell);
+
+  if (editingCell) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const currentCell = editingCell.cell;
+      editingCell.commit();
+      const nextSelection = moveSelectionDownWithinBlock(currentCell);
+      focusCellWithoutEditing(nextSelection.cell);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      editingCell.cancel();
+      focusCellWithoutEditing(selectedCell);
+      return;
+    }
+
+    if (isArrowNavigationKey) {
+      return;
+      }
+
     return;
   }
 
-  const activeElement = document.activeElement;
+  if (!hasSelectedCell) {
+    return;
+  }
 
   if (isArrowNavigationKey) {
-    if (isEditingElement(activeElement)) {
+    if (isEditingElement(document.activeElement)) {
       return;
     }
 
-    const cell = activeElement?.closest?.("[data-column-key]") || selectedCell;
-    if (!cell || !getCellMeta(cell)) {
-      return;
-    }
-
-    const nextCell = getAdjacentCellByArrow(cell, event.key);
+    const nextCell = getAdjacentCellByArrow(selectedCell, event.key);
     if (!nextCell) {
       return;
     }
@@ -231,39 +231,38 @@ function handleGridEnterKey(event) {
     return;
   }
 
-  const cell = activeElement?.closest?.("[data-column-key]") || selectedCell;
-  if (!cell) {
-    return;
-  }
-
-  const titleInput = activeElement?.classList?.contains("title-cell__input") ? activeElement : null;
-  if (titleInput) {
+  if (event.key === "Enter") {
     event.preventDefault();
-    titleInput.blur();
-    const nextSelection = moveSelectionDownWithinBlock(cell);
-    if (nextSelection.moved) {
-      focusAndEditCell(nextSelection.cell);
-      return;
-    }
-
-    setSelectedCell(cell);
-    focusAndEditCell(cell);
+    const nextSelection = moveSelectionDownWithinBlock(selectedCell);
+    focusCellWithoutEditing(nextSelection.cell);
     return;
   }
 
-  if (!getCellMeta(cell)) {
+  if (event.key === "F2" && selectedCell.dataset.columnKey === "title" && typeof selectedCell.openEditMode === "function") {
+    event.preventDefault();
+    selectedCell.openEditMode({ keepContent: true });
+    return;
+  }
+
+  if (isPrintableKey && selectedCell.dataset.columnKey === "title" && typeof selectedCell.openEditMode === "function") {
+    event.preventDefault();
+    selectedCell.openEditMode({ replaceWith: event.key });
+    return;
+  }
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v" && selectedCell.dataset.columnKey === "title") {
+    return;
+  }
+}
+
+function handleGridPaste(event) {
+  if (editingCell || !selectedCell || selectedCell.dataset.columnKey !== "title" || typeof selectedCell.openEditMode !== "function") {
     return;
   }
 
   event.preventDefault();
-  const nextSelection = moveSelectionDownWithinBlock(cell);
-  if (nextSelection.moved) {
-    focusAndEditCell(nextSelection.cell);
-    return;
-  }
-
-  setSelectedCell(cell);
-  focusAndEditCell(cell);
+  const pastedText = event.clipboardData?.getData("text") || "";
+  selectedCell.openEditMode({ replaceWith: pastedText });
 }
 function insertRow(blockIndex, atIndex) {
   const block = blocks[blockIndex];
@@ -485,8 +484,11 @@ function attachTitleCell(cell, row) {
     cell.appendChild(text);
   };
 
-  const openEditMode = () => {
+  const openEditMode = ({ replaceWith, keepContent = false } = {}) => {
     if (isEditing) {
+      if (editingCell?.input) {
+        editingCell.input.focus();
+      }
       return;
     }
 
@@ -501,7 +503,10 @@ function attachTitleCell(cell, row) {
     input.type = "text";
     input.className = "title-cell__input";
     input.maxLength = 100;
-    input.value = row.title || "";
+    input.value = replaceWith !== undefined ? replaceWith : row.title || "";
+    if (keepContent) {
+      input.value = row.title || "";
+    }
     const originalValue = row.title || "";
     let cancelled = false;
 
@@ -537,7 +542,13 @@ function attachTitleCell(cell, row) {
       input.style.width = `${width}px`;
       input.style.height = `${cellRect.height}px`;
     };
-    
+
+    const cleanupEditingState = () => {
+      if (editingCell?.cell === cell) {
+        editingCell = null;
+      }
+    };
+
     const commit = () => {
       if (cancelled) {
         return;
@@ -546,6 +557,16 @@ function attachTitleCell(cell, row) {
       row.title = (input.value || "").slice(0, 100);
       input.remove();
       window.removeEventListener("resize", updateOverlayPosition);
+      cleanupEditingState();
+      renderReadMode();
+    };
+
+    const cancel = () => {
+      cancelled = true;
+      row.title = originalValue;
+      input.remove();
+      window.removeEventListener("resize", updateOverlayPosition);
+      cleanupEditingState();
       renderReadMode();
     };
 
@@ -555,18 +576,14 @@ function attachTitleCell(cell, row) {
       }
     });
 
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        cancelled = true;
-        row.title = originalValue;
-        input.remove();
-        window.removeEventListener("resize", updateOverlayPosition);
-        renderReadMode();
-      }
-    });
-
     input.addEventListener("blur", commit, { once: true });
+
+    editingCell = {
+      cell,
+      input,
+      commit: () => input.blur(),
+      cancel,
+    };
 
     overlayLayer.appendChild(input);
     window.addEventListener("resize", updateOverlayPosition);
@@ -583,7 +600,6 @@ function attachTitleCell(cell, row) {
 
   cell.addEventListener("click", () => {
     setSelectedCell(cell);
-    openEditMode();
   });
 
   cell.addEventListener("focus", () => {
