@@ -1,1 +1,109 @@
+.ganttRoot {
+  --gantt-border: #585858;
+  --gantt-header-bg: #5e5e5e;
+  --gantt-header-text: #f2f2f2;
+  --gantt-green: #70ad47;
+  --gantt-yellow: #fcc000;
+  --gantt-row-height: 30px;
+  --gantt-header-height: 38px;
+  --gantt-day-width: 20px;
+  --gantt-left-width: 260px;
 
+  width: fit-content;
+  max-width: 100%;
+  margin: 24px auto 0;
+  background: #ffffff;
+  overflow-x: auto;
+}
+
+.ganttRoot .ganttLayout {
+  display: grid;
+  grid-template-columns: var(--gantt-left-width) calc(var(--gantt-days, 31) * var(--gantt-day-width));
+}
+
+.ganttRoot .ganttLeftColumn,
+.ganttRoot .ganttRightColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.ganttRoot .ganttMonthSpacer,
+.ganttRoot .ganttMonthHeader {
+  height: var(--gantt-header-height);
+  min-height: var(--gantt-header-height);
+}
+
+.ganttRoot .ganttMonthSpacer {
+  border-right: 2px solid var(--gantt-border);
+  border-bottom: 1px solid var(--gantt-border);
+  background: var(--gantt-header-bg);
+}
+
+.ganttRoot .ganttMonthHeader {
+  display: grid;
+  grid-template-columns: repeat(var(--gantt-days, 31), var(--gantt-day-width));
+  border-bottom: 1px solid var(--gantt-border);
+  background: var(--gantt-header-bg);
+}
+
+.ganttRoot .ganttDayCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--gantt-border);
+  color: var(--gantt-header-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ganttRoot .ganttDayCell:last-child {
+  border-right: none;
+}
+
+.ganttRoot .ganttBlockHeader,
+.ganttRoot .ganttRowLabel {
+  height: var(--gantt-row-height);
+  min-height: var(--gantt-row-height);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-right: 2px solid var(--gantt-border);
+  border-bottom: 1px solid var(--gantt-border);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ganttRoot .ganttRowLabel {
+  background: #ffffff;
+}
+
+.ganttRoot .ganttBlockHeader.is-green {
+  background: var(--gantt-green);
+  color: #ffffff;
+}
+
+.ganttRoot .ganttBlockHeader.is-yellow {
+  background: var(--gantt-yellow);
+  color: #111111;
+}
+
+.ganttRoot .ganttGridRow {
+  height: var(--gantt-row-height);
+  min-height: var(--gantt-row-height);
+  display: grid;
+  grid-template-columns: repeat(var(--gantt-days, 31), var(--gantt-day-width));
+}
+
+.ganttRoot .ganttGridCell {
+  border-right: 1px solid var(--gantt-border);
+  border-bottom: 1px solid var(--gantt-border);
+  background: #ffffff;
+}
+
+.ganttRoot .ganttGridCell:last-child {
+  border-right: none;
+}
+
+.ganttRoot .ganttGridRow.is-block-header .ganttGridCell {
+  background: transparent;
+}
