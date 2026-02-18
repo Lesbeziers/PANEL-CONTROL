@@ -343,11 +343,14 @@ body {
   margin: 0;
   font: inherit;
   color: inherit;
+  caret-color: #111;
+  cursor: text;
 }
 
 .title-edit-overlay-layer .title-cell__input.editor-overlay.is-editing {
   position: absolute;
   pointer-events: auto;
+  user-select: text;
   margin: 0;
   padding: 0 10px;
   background: #ffffff;
