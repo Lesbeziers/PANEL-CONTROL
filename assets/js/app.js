@@ -90,7 +90,7 @@ function setSelectedCell(cell) {
     selectedCell.classList.add("is-selected");
 
     const gridRoot = document.querySelector(".month-block__body-grid");
-    if (gridRoot && !editingCell && !isEditingElement(document.activeElement)) {
+    if (gridRoot && !editingCell) {
       gridRoot.focus({ preventScroll: true });
     }
   }
@@ -171,6 +171,11 @@ function setCellValue(cell, rawValue) {
 
   if (meta.columnKey === "title") {
     row.title = parsedValue;
+    const titleText = cell.querySelector(".title-cell__text");
+    if (titleText) {
+      titleText.textContent = row.title;
+      titleText.title = row.title;
+    }
   } else if (meta.columnKey === "promoBlockType") {
     row.promoBlockType = parsedValue;
     const select = cell.querySelector("select");
@@ -288,7 +293,8 @@ function focusCellWithoutEditing(cell) {
 
   requestAnimationFrame(() => {
     if (!editingCell) {
-      cell.focus();
+      const gridRoot = document.querySelector(".month-block__body-grid");
+      gridRoot?.focus({ preventScroll: true });
     }
   });
 }
@@ -393,35 +399,16 @@ function handleGridPaste(event) {
     return;
   }
 
-  if (isEditingElement(event.target)) {
-    return;
-  }
-
   const rowData = getRowByCell(selectedCell);
   if (!rowData) {
     return;
   }
 
   event.preventDefault();
-  const pastedText = event.clipboardData?.getData("text/plain") || event.clipboardData?.getData("text") || "";
-  const { meta } = rowData;
-  const updatedRowData = setCellValue(selectedCell, pastedText);
-  if (!updatedRowData) {
+  const pastedText = event.clipboardData?.getData("text/plain") || "";
+  if (!setCellValue(selectedCell, pastedText)) {
     return;
   }
-
-  const column = getColumnByKey(meta.columnKey);
-  const shouldEnterEditMode = column?.type === "text" || column?.type === "select";
-  if (!shouldEnterEditMode) {
-    return;
-  }
-
-  if (meta.columnKey === "title" && typeof selectedCell.openEditMode === "function") {
-    selectedCell.openEditMode({ keepContent: true });
-    return;
-  }
-  
-  focusCellEditor(selectedCell);
 }
 function insertRow(blockIndex, atIndex) {
   const block = blocks[blockIndex];
@@ -793,9 +780,13 @@ function attachTitleCell(cell, row) {
     });
   };
 
-    cell.openEditMode = openEditMode;
+  cell.openEditMode = openEditMode;
 
   cell.addEventListener("click", () => {
+    setSelectedCell(cell);
+  });
+
+  cell.addEventListener("dblclick", () => {
     setSelectedCell(cell);
     openEditMode({ keepContent: true });
   });
@@ -843,6 +834,10 @@ function renderMonthBlockGrid(root) {
   }
 
   renderRows();
+
+  const gridRoot = root.querySelector(".month-block__body-grid");
+  gridRoot?.addEventListener("keydown", handleGridEnterKey);
+  gridRoot?.addEventListener("paste", handleGridPaste);
 }
 
 function renderRows() {
@@ -928,4 +923,3 @@ function renderRows() {
 }
 
 renderMonthBlockGrid(document.getElementById("app"));
-document.addEventListener("keydown", handleGridEnterKey);
