@@ -515,7 +515,7 @@ function attachTitleCell(cell, row) {
 
     const input = document.createElement("input");
     input.type = "text";
-    input.className = "title-cell__input";
+    input.className = "title-cell__input editor-overlay is-editing";
     input.maxLength = 100;
     input.value = replaceWith !== undefined ? replaceWith : row.title || "";
     if (keepContent) {
