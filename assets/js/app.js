@@ -81,13 +81,13 @@ function getCellMeta(cell) {
 function moveSelectionDownWithinBlock(cell) {
   const meta = getCellMeta(cell);
   if (!meta) {
-    return;
+    return { moved: false, cell };
   }
 
   const block = blocks[meta.blockIndex];
   const nextRowIndex = meta.rowIndex + 1;
   if (!block || nextRowIndex >= block.rows.length) {
-    return;
+    return { moved: false, cell };
   }
 
   const nextCell = document.querySelector(
@@ -95,11 +95,32 @@ function moveSelectionDownWithinBlock(cell) {
   );
 
   if (!nextCell) {
-    return;
+    return { moved: false, cell };
   }
 
   setSelectedCell(nextCell);
-  nextCell.focus();
+  return { moved: true, cell: nextCell };
+}
+
+function focusAndEditCell(cell) {
+  if (!cell) {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    cell.focus();
+    if (cell.dataset.columnKey === "title" && typeof cell.openEditMode === "function") {
+      cell.openEditMode();
+      return;
+    }
+
+    if (cell.dataset.columnKey === "promoBlockType") {
+      const select = cell.querySelector("select");
+      if (select) {
+        select.focus();
+      }
+    }
+  });
 }
 
 function handleGridEnterKey(event) {
@@ -117,7 +138,14 @@ function handleGridEnterKey(event) {
   if (titleInput) {
     event.preventDefault();
     titleInput.blur();
-    moveSelectionDownWithinBlock(cell);
+    const nextSelection = moveSelectionDownWithinBlock(cell);
+    if (nextSelection.moved) {
+      focusAndEditCell(nextSelection.cell);
+      return;
+    }
+
+    setSelectedCell(cell);
+    focusAndEditCell(cell);
     return;
   }
 
@@ -126,7 +154,14 @@ function handleGridEnterKey(event) {
   }
 
   event.preventDefault();
-  moveSelectionDownWithinBlock(cell);
+  const nextSelection = moveSelectionDownWithinBlock(cell);
+  if (nextSelection.moved) {
+    focusAndEditCell(nextSelection.cell);
+    return;
+  }
+
+  setSelectedCell(cell);
+  focusAndEditCell(cell);
 }
 function insertRow(blockIndex, atIndex) {
   const block = blocks[blockIndex];
@@ -397,6 +432,8 @@ function attachTitleCell(cell, row) {
       input.setSelectionRange(end, end);
     });
   };
+
+    cell.openEditMode = openEditMode;
 
   cell.addEventListener("click", () => {
     setSelectedCell(cell);
