@@ -1,6 +1,5 @@
 const columns = [
   { key: "listo", label: "LISTO", type: "checkbox" },
-  { key: "promoBlockType", label: "TIPO", type: "select" },
   { key: "title", label: "TÍTULO", type: "text" },
   { key: "startDate", label: "INICIO VIG", type: "text" },
   { key: "endDate", label: "FIN VIG", type: "text" },
@@ -10,35 +9,16 @@ const columns = [
 
 const headers = columns.map((column) => column.label);
 
-const blockTypeOptions = [
-  "Arranque",
-  "Bumper",
-  "Canales LaLiga",
-  "Canales Golf",
-  "Colas",
-  "Combo",
-  "Distribuidores",
-  "ID",
-  "Intruso",
-  "Loop",
-  "Otras duraciones",
-  "Pasos a Publi",
-  "Pre-Roll",
-  "Promo 20",
-  "Promo 40",
-];
-
 let rowId = 0;
 
 function newRow() {
   rowId += 1;
-  return { id: `row-${Date.now()}-${rowId}`, blockType: "", promoBlockType: "", listo: false, title: "" };
+  return { id: `row-${Date.now()}-${rowId}`, blockType: "", listo: false, title: "" };
 }
 
 function newRowForBlock(blockType) {
   const row = newRow();
   row.blockType = blockType;
-  row.promoBlockType = blockTypeOptions.includes(blockType) ? blockType : "";
   return row;
 }
 
@@ -148,11 +128,6 @@ function parseCellValue(columnKey, rawValue) {
     return ["true", "1", "x", "si", "sí"].includes(normalized);
   }
 
-  if (column.type === "select") {
-    const normalized = textValue.trim();
-    return blockTypeOptions.includes(normalized) ? normalized : "";
-  }
-
   if (columnKey === "title") {
     return textValue.slice(0, 100);
   }
@@ -176,12 +151,6 @@ function setCellValue(cell, rawValue) {
       titleText.textContent = row.title;
       titleText.title = row.title;
     }
-  } else if (meta.columnKey === "promoBlockType") {
-    row.promoBlockType = parsedValue;
-    const select = cell.querySelector("select");
-    if (select) {
-      select.value = row.promoBlockType;
-    }
   } else if (meta.columnKey === "listo") {
     row.listo = parsedValue;
     const checkbox = cell.querySelector('input[type="checkbox"]');
@@ -201,14 +170,6 @@ function focusCellEditor(cell) {
   const columnKey = cell.dataset.columnKey;
   if (columnKey === "title" && typeof cell.openEditMode === "function") {
     cell.openEditMode({ keepContent: true });
-    return;
-  }
-
-  if (columnKey === "promoBlockType") {
-    const select = cell.querySelector("select");
-    if (select) {
-      select.focus();
-    }
     return;
   }
 
@@ -499,7 +460,7 @@ function createLeftRow({ group = false, cells = [], onAddRow } = {}) {
   const leftRow = document.createElement("div");
   leftRow.className = `left-row ${group ? "group" : ""}`;
 
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 7; i++) {
     const cell = document.createElement("div");
 
     if (i === 0) {
@@ -524,6 +485,13 @@ function createLeftRow({ group = false, cells = [], onAddRow } = {}) {
 
         cell.append(addBtn, removeBtn);
       }
+    } else if (group && i === 2 && cells[i] && typeof cells[i] === "object") {
+      const leftText = document.createElement("span");
+      leftText.textContent = cells[i].left || "";
+      const rightText = document.createElement("span");
+      rightText.textContent = cells[i].right || "";
+      cell.classList.add("group-title-cell");
+      cell.append(leftText, rightText);
     } else {
       cell.textContent = cells[i] || "";
     }
@@ -532,32 +500,6 @@ function createLeftRow({ group = false, cells = [], onAddRow } = {}) {
   }
 
   return leftRow;
-}
-
-function createBlockTypeSelect(row) {
-  const select = document.createElement("select");
-  select.className = "block-type-select";
-  const selectedValue = blockTypeOptions.includes(row.promoBlockType) ? row.promoBlockType : "";
-
-  const emptyOption = document.createElement("option");
-  emptyOption.value = "";
-  emptyOption.textContent = "";
-  select.appendChild(emptyOption);
-
-  blockTypeOptions.forEach((optionValue) => {
-    const option = document.createElement("option");
-    option.value = optionValue;
-    option.textContent = optionValue;
-    option.selected = optionValue === selectedValue;
-    select.appendChild(option);
-  });
-
-  select.value = selectedValue;
-  select.addEventListener("change", (event) => {
-    row.promoBlockType = event.target.value;
-  });
-
-  return select;
 }
 
 function createDayRow(group = false) {
@@ -851,7 +793,7 @@ function renderRows() {
   blocks.forEach((block, blockIndex) => {
     const groupLeftRow = createLeftRow({
       group: true,
-      cells: ["", "", block.blockType.toUpperCase(), "MÁXIMO 5 SIMULTÁNEAS", "", "", "", ""],
+      cells: ["", "", { left: block.blockType.toUpperCase(), right: "(Máximo 5 simultáneas)" }, "", "", "", ""],
       onAddRow: () => insertRow(blockIndex, 0),
     });
     const groupDayRow = createDayRow(true);
@@ -868,7 +810,7 @@ function renderRows() {
       const dayRow = createDayRow();
       
       attachListoCheckbox(leftRow.children[1], row);
-      attachTitleCell(leftRow.children[3], row);
+      attachTitleCell(leftRow.children[2], row);
 
       leftRow.children[1].dataset.blockIndex = String(blockIndex);
       leftRow.children[1].dataset.rowIndex = String(rowIndex);
@@ -879,40 +821,16 @@ function renderRows() {
         selectedCell.classList.add("is-selected");
       }
 
-      leftRow.children[3].dataset.blockIndex = String(blockIndex);
-      leftRow.children[3].dataset.rowIndex = String(rowIndex);
-      leftRow.children[3].dataset.rowId = row.id;
-      leftRow.children[3].dataset.columnKey = "title";
-      leftRow.children[3].tabIndex = 0;
+      leftRow.children[2].dataset.blockIndex = String(blockIndex);
+      leftRow.children[2].dataset.rowIndex = String(rowIndex);
+      leftRow.children[2].dataset.rowId = row.id;
+      leftRow.children[2].dataset.columnKey = "title";
+      leftRow.children[2].tabIndex = 0;
       if (isSelectedCellState(row, "title")) {
-        selectedCell = leftRow.children[3];
+        selectedCell = leftRow.children[2];
         selectedCell.classList.add("is-selected");
       }
-      
-      const typeCell = leftRow.children[2];
-      typeCell.textContent = "";
-      typeCell.classList.add("type-cell");
-      typeCell.dataset.blockIndex = String(blockIndex);
-      typeCell.dataset.rowIndex = String(rowIndex);
-      typeCell.dataset.rowId = row.id;
-      typeCell.dataset.columnKey = "promoBlockType";
-      typeCell.tabIndex = 0;
-      if (isSelectedCellState(row, "promoBlockType")) {
-        selectedCell = typeCell;
-        selectedCell.classList.add("is-selected");
-      }
-      typeCell.addEventListener("focus", () => {
-        setSelectedCell(typeCell);
-      });
-      typeCell.addEventListener("click", () => {
-        setSelectedCell(typeCell);
-      });
 
-      const typeSelect = createBlockTypeSelect(row);
-      typeSelect.addEventListener("focus", () => {
-        setSelectedCell(typeCell);
-      });
-      typeCell.appendChild(typeSelect);
       leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
       dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
 
