@@ -1083,6 +1083,25 @@ function handleGridEnterKey(event) {
   }
 
   if ((event.key === "Delete" || event.key === "Backspace") && selectedCell) {
+    const hasVerticalRangeSelection =
+      !!dragSelection
+      && dragSelection.col === selectedCell.dataset.columnKey
+      && dragSelection.r2 > dragSelection.r1;
+
+    if (hasVerticalRangeSelection && !editingCell && !isEditingElement(document.activeElement)) {
+      for (let rowIndex = dragSelection.r1; rowIndex <= dragSelection.r2; rowIndex += 1) {
+        const targetCell = document.querySelector(
+          `[data-block-index="${dragSelection.blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${dragSelection.col}"]`
+        );
+        if (targetCell) {
+          setCellValue(targetCell, "");
+        }
+      }
+
+      event.preventDefault();
+      return;
+    }
+
     const rowData = getRowByCell(selectedCell);
     if (!rowData) {
       return;
