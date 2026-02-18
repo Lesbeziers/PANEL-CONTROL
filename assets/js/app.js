@@ -3,7 +3,13 @@ const columns = [
   { key: "title", label: "TÍTULO", type: "text" },
   { key: "startDate", label: "INICIO VIG", type: "text" },
   { key: "endDate", label: "FIN VIG", type: "text" },
-  { key: "genre", label: "GÉNERO", type: "text" },
+  {
+    key: "genre",
+    label: "GÉNERO",
+    type: "text",
+    cellType: "select",
+    options: ["Caza y Pesca", "Cine", "Deportes", "Entretenimiento", "Ficción", "No ficción", "Series"],
+  },
   { key: "id", label: "ID", type: "text" },
 ];
 
@@ -21,6 +27,7 @@ function newRow() {
     blockType: "",
     listo: false,
     title: "",
+    genre: "",
     startDateText: "",
     startDateISO: null,
     endDateText: "",
@@ -44,6 +51,9 @@ let selectedCell = null;
 let selectedCellState = null;
 let editingCell = null;
 let titleOverlayLayer = null;
+let genreTypeBuffer = "";
+let genreTypeBufferTimestamp = 0;
+const GENRE_TYPE_BUFFER_TIMEOUT_MS = 700;
 
 function getTitleOverlayLayer() {
   if (titleOverlayLayer?.isConnected) {
@@ -144,7 +154,17 @@ function parseCellValue(columnKey, rawValue) {
     return textValue.slice(0, 100);
   }
 
-    if (DATE_COLUMNS.has(columnKey)) {
+  if (column?.cellType === "select") {
+    const normalizedInput = textValue.trim().toLocaleLowerCase();
+    if (!normalizedInput) {
+      return "";
+    }
+
+    const matchedOption = column.options?.find((option) => option.toLocaleLowerCase() === normalizedInput);
+    return matchedOption || "";
+  }
+
+  if (DATE_COLUMNS.has(columnKey)) {
     return `${rawValue ?? ""}`;
   }
 
@@ -290,6 +310,9 @@ function setCellValue(cell, rawValue) {
   } else if (DATE_COLUMNS.has(meta.columnKey)) {
     applyDateCellValue(row, meta.columnKey, parsedValue);
     renderDateCell(cell, row, meta.columnKey);
+  } else if (meta.columnKey === "genre") {
+    row.genre = parsedValue;
+    cell.textContent = row.genre;
   }
 
   return { row, meta };
@@ -512,7 +535,7 @@ function handleGridEnterKey(event) {
       return;
     }
 
-    if (isArrowNavigationKey) {
+    if (isArrowNavigationKey && editingCell.type !== "select") {
       event.preventDefault();
       const currentCell = editingCell.cell;
       editingCell.commit();
@@ -573,6 +596,27 @@ function handleGridEnterKey(event) {
   }
 
   if (isPrintableKey && typeof selectedCell.openEditMode === "function") {
+    const column = getColumnByKey(selectedCell.dataset.columnKey);
+    if (column?.cellType === "select") {
+      event.preventDefault();
+      const now = Date.now();
+      const normalizedKey = event.key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+      genreTypeBuffer = now - genreTypeBufferTimestamp <= GENRE_TYPE_BUFFER_TIMEOUT_MS
+        ? `${genreTypeBuffer}${normalizedKey}`
+        : normalizedKey;
+      genreTypeBufferTimestamp = now;
+
+      const matchedOption = column.options?.find((option) => {
+        const normalizedOption = option.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+        return normalizedOption.startsWith(genreTypeBuffer);
+      });
+
+      if (matchedOption) {
+        setCellValue(selectedCell, matchedOption);
+      }
+      return;
+    }
+
     event.preventDefault();
     selectedCell.openEditMode({ replaceWith: event.key });
     return;
@@ -689,6 +733,94 @@ function attachDateCell(cell, row, columnKey) {
 
   cell.openEditMode = openEditMode;
 
+  cell.addEventListener("click", () => setSelectedCell(cell));
+  cell.addEventListener("dblclick", () => {
+    setSelectedCell(cell);
+    openEditMode({ keepContent: true });
+  });
+  cell.addEventListener("focus", () => setSelectedCell(cell));
+
+  render();
+}
+
+function attachGenreCell(cell, row) {
+  cell.classList.add("genre-cell");
+  cell.tabIndex = 0;
+
+  const render = () => {
+    cell.textContent = row.genre || "";
+  };
+
+  const openEditMode = ({ keepContent = false, replaceWith } = {}) => {
+    if (editingCell?.cell === cell) {
+      return;
+    }
+
+    const column = getColumnByKey("genre");
+    if (!column) {
+      return;
+    }
+
+    cell.classList.add("is-editing");
+    const select = document.createElement("select");
+    select.className = "genre-cell__select editor-overlay is-editing";
+
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = "";
+    select.appendChild(emptyOption);
+
+    column.options.forEach((option) => {
+      const optionElement = document.createElement("option");
+      optionElement.value = option;
+      optionElement.textContent = option;
+      select.appendChild(optionElement);
+    });
+
+    select.value = keepContent ? row.genre || "" : (replaceWith ?? row.genre ?? "");
+    const originalValue = row.genre || "";
+    let cancelled = false;
+
+    const cleanup = () => {
+      if (editingCell?.cell === cell) {
+        editingCell = null;
+      }
+      cell.classList.remove("is-editing");
+      render();
+    };
+
+    const commit = () => {
+      if (!cancelled) {
+        row.genre = parseCellValue("genre", select.value);
+      }
+      cleanup();
+    };
+
+    const cancel = () => {
+      cancelled = true;
+      row.genre = originalValue;
+      cleanup();
+    };
+
+    select.addEventListener("blur", commit, { once: true });
+
+    cell.textContent = "";
+    cell.appendChild(select);
+
+    editingCell = {
+      cell,
+      input: select,
+      type: "select",
+      commit: () => select.blur(),
+      cancel,
+    };
+
+    requestAnimationFrame(() => {
+      select.focus({ preventScroll: true });
+    });
+  };
+
+  cell.openEditMode = openEditMode;
   cell.addEventListener("click", () => setSelectedCell(cell));
   cell.addEventListener("dblclick", () => {
     setSelectedCell(cell);
@@ -1177,6 +1309,18 @@ function renderRows() {
         selectedCell = leftRow.children[4];
         selectedCell.classList.add("is-selected");
       }
+
+      attachGenreCell(leftRow.children[5], row);
+      leftRow.children[5].dataset.blockIndex = String(blockIndex);
+      leftRow.children[5].dataset.rowIndex = String(rowIndex);
+      leftRow.children[5].dataset.rowId = row.id;
+      leftRow.children[5].dataset.columnKey = "genre";
+      if (isSelectedCellState(row, "genre")) {
+        selectedCell = leftRow.children[5];
+        selectedCell.classList.add("is-selected");
+      }
+
+      leftRow.children[6].textContent = row.id || "";
 
       leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
       dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
