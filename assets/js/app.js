@@ -832,9 +832,11 @@ function attachGenreCell(cell, row) {
 
     const positionMenu = () => {
       const cellRect = cell.getBoundingClientRect();
+      const menuWidth = Math.max(0, cellRect.width - 2);
       menu.style.left = `${cellRect.left}px`;
       menu.style.top = `${cellRect.bottom - 1}px`;
-      menu.style.width = `${cellRect.width}px`;
+      menu.style.width = `${menuWidth}px`;
+      menu.style.maxWidth = `${menuWidth}px`;
       menu.classList.add("open");
     };
 
