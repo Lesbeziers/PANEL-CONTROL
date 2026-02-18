@@ -88,6 +88,11 @@ function setSelectedCell(cell) {
 
   if (selectedCell?.isConnected) {
     selectedCell.classList.add("is-selected");
+
+    const gridRoot = document.querySelector(".month-block__body-grid");
+    if (gridRoot && !editingCell && !isEditingElement(document.activeElement)) {
+      gridRoot.focus({ preventScroll: true });
+    }
   }
 }
 
@@ -124,6 +129,63 @@ function getRowByCell(cell) {
   }
 
   return { meta, row };
+}
+
+function getColumnByKey(columnKey) {
+  return columns.find((column) => column.key === columnKey) || null;
+}
+
+function parseCellValue(columnKey, rawValue) {
+  const column = getColumnByKey(columnKey);
+  const textValue = `${rawValue ?? ""}`;
+
+  if (!column) {
+    return textValue;
+  }
+
+  if (column.type === "checkbox") {
+    const normalized = textValue.trim().toLowerCase();
+    return ["true", "1", "x", "si", "sí"].includes(normalized);
+  }
+
+  if (column.type === "select") {
+    const normalized = textValue.trim();
+    return blockTypeOptions.includes(normalized) ? normalized : "";
+  }
+
+  if (columnKey === "title") {
+    return textValue.slice(0, 100);
+  }
+
+  return textValue;
+}
+
+function setCellValue(cell, rawValue) {
+  const rowData = getRowByCell(cell);
+  if (!rowData) {
+    return null;
+  }
+
+  const { row, meta } = rowData;
+  const parsedValue = parseCellValue(meta.columnKey, rawValue);
+
+  if (meta.columnKey === "title") {
+    row.title = parsedValue;
+  } else if (meta.columnKey === "promoBlockType") {
+    row.promoBlockType = parsedValue;
+    const select = cell.querySelector("select");
+    if (select) {
+      select.value = row.promoBlockType;
+    }
+  } else if (meta.columnKey === "listo") {
+    row.listo = parsedValue;
+    const checkbox = cell.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+      checkbox.checked = row.listo;
+    }
+  }
+
+  return { row, meta };
 }
 
 function focusCellEditor(cell) {
@@ -315,24 +377,8 @@ function handleGridEnterKey(event) {
     }
 
     event.preventDefault();
-    const { row, meta } = rowData;
-
-    if (meta.columnKey === "title") {
-      row.title = "";
-    } else if (meta.columnKey === "promoBlockType") {
-      row.promoBlockType = "";
-      const select = selectedCell.querySelector("select");
-      if (select) {
-        select.value = "";
-      }
-    } else if (meta.columnKey === "listo") {
-      row.listo = false;
-      const checkbox = selectedCell.querySelector('input[type="checkbox"]');
-      if (checkbox) {
-        checkbox.checked = false;
-      }
-    }
-
+    setCellValue(selectedCell, "");
+    
     focusCellEditor(selectedCell);
     return;
   }
@@ -343,7 +389,11 @@ function handleGridEnterKey(event) {
 }
 
 function handleGridPaste(event) {
-  if (editingCell || !selectedCell) {
+  if (!selectedCell || editingCell) {
+    return;
+  }
+
+  if (isEditingElement(event.target)) {
     return;
   }
 
@@ -354,36 +404,24 @@ function handleGridPaste(event) {
 
   event.preventDefault();
   const pastedText = event.clipboardData?.getData("text/plain") || event.clipboardData?.getData("text") || "";
-  const { row, meta } = rowData;
-
-  if (meta.columnKey === "title") {
-    row.title = pastedText.slice(0, 100);
-    if (typeof selectedCell.openEditMode === "function") {
-      selectedCell.openEditMode({ replaceWith: row.title });
-    }
+  const { meta } = rowData;
+  const updatedRowData = setCellValue(selectedCell, pastedText);
+  if (!updatedRowData) {
     return;
   }
 
-  if (meta.columnKey === "promoBlockType") {
-    const normalized = pastedText.trim();
-    row.promoBlockType = blockTypeOptions.includes(normalized) ? normalized : "";
-    const select = selectedCell.querySelector("select");
-    if (select) {
-      select.value = row.promoBlockType;
-    }
-    focusCellEditor(selectedCell);
+  const column = getColumnByKey(meta.columnKey);
+  const shouldEnterEditMode = column?.type === "text" || column?.type === "select";
+  if (!shouldEnterEditMode) {
     return;
   }
 
-  if (meta.columnKey === "listo") {
-    const normalized = pastedText.trim().toLowerCase();
-    row.listo = ["true", "1", "x", "si", "sí"].includes(normalized);
-    const checkbox = selectedCell.querySelector('input[type="checkbox"]');
-    if (checkbox) {
-      checkbox.checked = row.listo;
-    }
-    focusCellEditor(selectedCell);
+  if (meta.columnKey === "title" && typeof selectedCell.openEditMode === "function") {
+    selectedCell.openEditMode({ keepContent: true });
+    return;
   }
+  
+  focusCellEditor(selectedCell);
 }
 function insertRow(blockIndex, atIndex) {
   const block = blocks[blockIndex];
@@ -779,7 +817,7 @@ function renderMonthBlockGrid(root) {
         </div>
       </header>
       <div class="month-block__body">
-        <div class="month-block__body-grid">
+        <div class="month-block__body-grid" tabindex="0" aria-label="Grid de planificación">
           <div class="left-grid" id="left-body"></div>
           <div class="right-body-scroll" id="right-body-scroll">
             <div id="right-body"></div>
