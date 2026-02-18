@@ -115,8 +115,16 @@ body {
 }
 
 .month-block__body-grid {
+  position: relative;
   display: grid;
   grid-template-columns: 930px calc(31 * var(--day-width));
+}
+
+.title-edit-overlay-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 30;
 }
 
 .left-row,
@@ -302,7 +310,17 @@ body {
   padding: 0;
   margin: 0;
   font: inherit;
-  color: inherit;  
+  color: inherit;
+}
+
+.title-edit-overlay-layer .title-cell__input {
+  position: absolute;
+  pointer-events: auto;
+  margin: 0;
+  padding: 0 10px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 2px #009944;
+  z-index: 40;
 }
 
 .left-row > div.checkbox-cell {
