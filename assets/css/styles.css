@@ -290,23 +290,21 @@ body {
 
 .copy-ants {
   position: absolute;
-  border: 2px solid transparent;
+  border: 2px solid #00b050;
   background-image: repeating-linear-gradient(
     45deg,
-    #000 0 6px,
-    #fff 6px 12px
+    rgba(0, 176, 80, 0.2) 0 6px,
+    transparent 6px 12px
   );
   background-size: 16px 16px;
   background-clip: border-box;
   pointer-events: none;
   z-index: 6;
-  opacity: 0;
   visibility: hidden;
   animation: copy-ants-marching 0.45s linear infinite;
 }
 
 .copy-ants.is-visible {
-  opacity: 1;
   visibility: visible;
 }
 
