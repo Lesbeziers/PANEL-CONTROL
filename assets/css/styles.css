@@ -342,6 +342,27 @@ body {
   z-index: 999;
 }
 
+.left-row > div.date-cell {
+  overflow: hidden;
+}
+
+.left-row > div.date-cell.has-error {
+  box-shadow: inset 0 0 0 2px #d93025 !important;
+}
+
+.date-cell__input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 2px #00b050 !important;
+  padding: 0 10px;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+}
+
 .left-row > div.checkbox-cell {
   justify-content: center;
   padding: 0;
