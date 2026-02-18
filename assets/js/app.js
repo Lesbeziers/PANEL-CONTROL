@@ -49,6 +49,24 @@ let blocks = [
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
 let selectedCell = null;
+let titleOverlayLayer = null;
+
+function getTitleOverlayLayer() {
+  if (titleOverlayLayer?.isConnected) {
+    return titleOverlayLayer;
+  }
+
+  const gridRoot = document.querySelector(".month-block__body-grid");
+  if (!gridRoot) {
+    return null;
+  }
+
+  const layer = document.createElement("div");
+  layer.className = "title-edit-overlay-layer";
+  gridRoot.appendChild(layer);
+  titleOverlayLayer = layer;
+  return titleOverlayLayer;
+}
 
 function setSelectedCell(cell) {
   if (selectedCell && selectedCell !== cell) {
@@ -389,7 +407,12 @@ function attachTitleCell(cell, row) {
     }
 
     isEditing = true;
-    cell.classList.add("is-editing");    
+    cell.classList.add("is-editing");
+    const overlayLayer = getTitleOverlayLayer();
+    if (!overlayLayer) {
+      return;
+    }
+
     const input = document.createElement("input");
     input.type = "text";
     input.className = "title-cell__input";
@@ -397,6 +420,39 @@ function attachTitleCell(cell, row) {
     input.value = row.title || "";
     const originalValue = row.title || "";
     let cancelled = false;
+
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    const updateOverlayPosition = () => {
+      const gridRoot = overlayLayer.parentElement;
+      if (!gridRoot) {
+        return;
+      }
+
+      const cellRect = cell.getBoundingClientRect();
+      const rootRect = gridRoot.getBoundingClientRect();
+      const styles = window.getComputedStyle(cell);
+      const horizontalPadding = Number.parseFloat(styles.paddingLeft || "0") + Number.parseFloat(styles.paddingRight || "0") + 24;
+      const fontWeight = window.getComputedStyle(input).fontWeight || styles.fontWeight;
+      const fontSize = window.getComputedStyle(input).fontSize || styles.fontSize;
+      const fontFamily = window.getComputedStyle(input).fontFamily || styles.fontFamily;
+
+      let measuredWidth = cellRect.width;
+      if (context) {
+        context.font = `${fontWeight} ${fontSize} ${fontFamily}`;
+        const textWidth = context.measureText(input.value || " ").width;
+        measuredWidth = textWidth + horizontalPadding;
+      }
+
+      const maxWidth = Math.max(cellRect.width, rootRect.right - cellRect.left - 2);
+      const width = Math.min(maxWidth, Math.max(cellRect.width, measuredWidth));
+
+      input.style.left = `${cellRect.left - rootRect.left}px`;
+      input.style.top = `${cellRect.top - rootRect.top}px`;
+      input.style.width = `${width}px`;
+      input.style.height = `${cellRect.height}px`;
+    };
     
     const commit = () => {
       if (cancelled) {
@@ -404,6 +460,8 @@ function attachTitleCell(cell, row) {
       }
       
       row.title = (input.value || "").slice(0, 100);
+      input.remove();
+      window.removeEventListener("resize", updateOverlayPosition);
       renderReadMode();
     };
 
@@ -417,15 +475,19 @@ function attachTitleCell(cell, row) {
       if (event.key === "Escape") {
         event.preventDefault();
         cancelled = true;
-        row.title = originalValue;        
+        row.title = originalValue;
+        input.remove();
+        window.removeEventListener("resize", updateOverlayPosition);
         renderReadMode();
       }
     });
 
     input.addEventListener("blur", commit, { once: true });
 
-    cell.textContent = "";
-    cell.appendChild(input);
+    overlayLayer.appendChild(input);
+    window.addEventListener("resize", updateOverlayPosition);
+    updateOverlayPosition();
+
     requestAnimationFrame(() => {
       input.focus();
       const end = input.value.length;
