@@ -120,6 +120,67 @@ function moveSelectionDownWithinBlock(cell) {
   return { moved: true, cell: nextCell };
 }
 
+function getAdjacentCellByArrow(cell, key) {
+  const meta = getCellMeta(cell);
+  if (!meta) {
+    return null;
+  }
+
+  if (key === "ArrowLeft" || key === "ArrowRight") {
+    const row = cell.parentElement;
+    if (!row) {
+      return null;
+    }
+
+    const rowCells = [...row.querySelectorAll("[data-column-key]")];
+    const currentIndex = rowCells.indexOf(cell);
+    if (currentIndex < 0) {
+      return null;
+    }
+
+    const delta = key === "ArrowLeft" ? -1 : 1;
+    return rowCells[currentIndex + delta] || null;
+  }
+
+  if (key === "ArrowUp" || key === "ArrowDown") {
+    const block = blocks[meta.blockIndex];
+    if (!block) {
+      return null;
+    }
+
+    const delta = key === "ArrowUp" ? -1 : 1;
+    const nextRowIndex = meta.rowIndex + delta;
+    if (nextRowIndex < 0 || nextRowIndex >= block.rows.length) {
+      return null;
+    }
+
+    return document.querySelector(
+      `[data-block-index="${meta.blockIndex}"][data-row-index="${nextRowIndex}"][data-column-key="${meta.columnKey}"]`
+    );
+  }
+
+  return null;
+}
+
+function focusCellWithoutEditing(cell) {
+  if (!cell) {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    cell.focus();
+  });
+}
+
+function isEditingElement(element) {
+  if (!element) {
+    return false;
+  }
+
+  const tagName = element.tagName?.toLowerCase();
+  return tagName === "input" || tagName === "textarea" || tagName === "select" || element.isContentEditable;
+}
+
 function focusAndEditCell(cell) {
   if (!cell) {
     return;
@@ -142,11 +203,34 @@ function focusAndEditCell(cell) {
 }
 
 function handleGridEnterKey(event) {
-  if (event.key !== "Enter") {
+  const isArrowNavigationKey = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key);
+  if (event.key !== "Enter" && !isArrowNavigationKey) {
     return;
   }
 
   const activeElement = document.activeElement;
+
+  if (isArrowNavigationKey) {
+    if (isEditingElement(activeElement)) {
+      return;
+    }
+
+    const cell = activeElement?.closest?.("[data-column-key]") || selectedCell;
+    if (!cell || !getCellMeta(cell)) {
+      return;
+    }
+
+    const nextCell = getAdjacentCellByArrow(cell, event.key);
+    if (!nextCell) {
+      return;
+    }
+
+    event.preventDefault();
+    setSelectedCell(nextCell);
+    focusCellWithoutEditing(nextCell);
+    return;
+  }
+
   const cell = activeElement?.closest?.("[data-column-key]") || selectedCell;
   if (!cell) {
     return;
