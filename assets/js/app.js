@@ -688,6 +688,68 @@ function setCopyRange(nextRange, blockIndex = null) {
   syncCopyAntsPosition();
 }
 
+function getCopySelection() {
+  if (dragSelection) {
+    return {
+      blockIndex: dragSelection.blockIndex,
+      col: dragSelection.col,
+      r1: dragSelection.r1,
+      r2: dragSelection.r2,
+    };
+  }
+
+  const activeMeta = getCellMeta(selectedCell);
+  if (!activeMeta) {
+    return null;
+  }
+
+  return {
+    blockIndex: activeMeta.blockIndex,
+    col: activeMeta.columnKey,
+    r1: activeMeta.rowIndex,
+    r2: activeMeta.rowIndex,
+  };
+}
+
+function buildCopyTextFromSelection(selection) {
+  const block = blocks[selection.blockIndex];
+  if (!block) {
+    return "";
+  }
+
+  const values = [];
+  for (let rowIndex = selection.r1; rowIndex <= selection.r2; rowIndex += 1) {
+    values.push(getCellRawValue(block.rows[rowIndex], selection.col));
+  }
+
+  return values.join("\n");
+}
+
+function copyTextToClipboard(text) {
+  const fallbackCopy = () => {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  };
+
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {
+      fallbackCopy();
+    });
+    return;
+  }
+
+  fallbackCopy();
+}
+
 function clearFillPreview() {
   document.querySelectorAll(".left-row > div[data-column-key].is-fill-preview").forEach((cell) => {
     cell.classList.remove("is-fill-preview");
@@ -1083,6 +1145,10 @@ function handleGridEnterKey(event) {
   }
 
   if (!hasSelectedCell) {
+    if (event.key === "Escape" && copyRange) {
+      setCopyRange(null);
+      event.preventDefault();
+    }
     return;
   }
 
@@ -1091,32 +1157,21 @@ function handleGridEnterKey(event) {
       return;
     }
 
-    if (dragSelection) {
-      setCopyRange(
-        {
-          col: dragSelection.col,
-          r1: dragSelection.r1,
-          r2: dragSelection.r2,
-        },
-        dragSelection.blockIndex
-      );
-      event.preventDefault();
-      return;
-    }
-
-    const activeMeta = getCellMeta(selectedCell);
-    if (!activeMeta) {
+    const nextCopySelection = getCopySelection();
+    if (!nextCopySelection) {
       return;
     }
 
     setCopyRange(
       {
-        col: activeMeta.columnKey,
-        r1: activeMeta.rowIndex,
-        r2: activeMeta.rowIndex,
+        col: nextCopySelection.col,
+        r1: nextCopySelection.r1,
+        r2: nextCopySelection.r2,
       },
-      activeMeta.blockIndex
+      nextCopySelection.blockIndex
     );
+    const clipboardText = buildCopyTextFromSelection(nextCopySelection);
+    copyTextToClipboard(clipboardText);
     event.preventDefault();
     return;
   }
@@ -1330,6 +1385,8 @@ function attachDateCell(cell, row, columnKey) {
       return;
     }
 
+    setCopyRange(null);
+
     cell.classList.add("is-editing");
     const input = document.createElement("input");
     input.type = "text";
@@ -1398,6 +1455,8 @@ function attachGenreCell(cell, row) {
     if (editingCell?.cell === cell) {
       return;
     }
+
+    setCopyRange(null);
 
     const column = getColumnByKey("genre");
     if (!column) {
@@ -1783,6 +1842,8 @@ function attachTitleCell(cell, row) {
       return;
     }
 
+    setCopyRange(null);
+
     isEditing = true;
     cell.classList.add("is-editing");
     const overlayLayer = getTitleOverlayLayer();
@@ -1922,6 +1983,8 @@ function attachIdTextCell(cell, row) {
     if (editingCell?.cell === cell) {
       return;
     }
+
+    setCopyRange(null);
 
     cell.classList.add("is-editing");
     const input = document.createElement("input");
