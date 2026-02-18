@@ -56,6 +56,9 @@ let genreMenuElement = null;
 let fillHandleElement = null;
 let fillDragState = null;
 const DRAG_THRESHOLD_PX = 6;
+let copyAntsElement = null;
+let copyRange = null;
+let copyRangeBlockIndex = null;
 let dragSelectState = {
   pointerDown: false,
   isDragSelect: false,
@@ -611,6 +614,80 @@ function ensureFillHandleElement() {
   return fillHandleElement;
 }
 
+function ensureCopyAntsElement() {
+  if (copyAntsElement?.isConnected) {
+    return copyAntsElement;
+  }
+
+  const gridRoot = document.querySelector(".month-block__body-grid");
+  if (!gridRoot) {
+    return null;
+  }
+
+  copyAntsElement = document.createElement("div");
+  copyAntsElement.className = "copy-ants";
+  copyAntsElement.setAttribute("aria-hidden", "true");
+  gridRoot.appendChild(copyAntsElement);
+  return copyAntsElement;
+}
+
+function syncCopyAntsPosition() {
+  const ants = ensureCopyAntsElement();
+  if (!ants) {
+    return;
+  }
+
+  if (!copyRange || copyRangeBlockIndex === null) {
+    ants.classList.remove("is-visible");
+    return;
+  }
+
+  const gridRoot = document.querySelector(".month-block__body-grid");
+  if (!gridRoot) {
+    ants.classList.remove("is-visible");
+    return;
+  }
+
+  const topCell = document.querySelector(
+    `[data-block-index="${copyRangeBlockIndex}"][data-row-index="${copyRange.r1}"][data-column-key="${copyRange.col}"]`
+  );
+  const bottomCell = document.querySelector(
+    `[data-block-index="${copyRangeBlockIndex}"][data-row-index="${copyRange.r2}"][data-column-key="${copyRange.col}"]`
+  );
+
+  if (!topCell || !bottomCell) {
+    ants.classList.remove("is-visible");
+    return;
+  }
+
+  const rootRect = gridRoot.getBoundingClientRect();
+  const topRect = topCell.getBoundingClientRect();
+  const bottomRect = bottomCell.getBoundingClientRect();
+
+  ants.style.left = `${topRect.left - rootRect.left}px`;
+  ants.style.top = `${topRect.top - rootRect.top}px`;
+  ants.style.width = `${topRect.width}px`;
+  ants.style.height = `${bottomRect.bottom - topRect.top}px`;
+  ants.classList.add("is-visible");
+}
+
+function setCopyRange(nextRange, blockIndex = null) {
+  if (!nextRange) {
+    copyRange = null;
+    copyRangeBlockIndex = null;
+    syncCopyAntsPosition();
+    return;
+  }
+
+  copyRange = {
+    col: nextRange.col,
+    r1: nextRange.r1,
+    r2: nextRange.r2,
+  };
+  copyRangeBlockIndex = blockIndex;
+  syncCopyAntsPosition();
+}
+
 function clearFillPreview() {
   document.querySelectorAll(".left-row > div[data-column-key].is-fill-preview").forEach((cell) => {
     cell.classList.remove("is-fill-preview");
@@ -1006,6 +1083,47 @@ function handleGridEnterKey(event) {
   }
 
   if (!hasSelectedCell) {
+    return;
+  }
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+    if (isEditingElement(document.activeElement)) {
+      return;
+    }
+
+    if (dragSelection) {
+      setCopyRange(
+        {
+          col: dragSelection.col,
+          r1: dragSelection.r1,
+          r2: dragSelection.r2,
+        },
+        dragSelection.blockIndex
+      );
+      event.preventDefault();
+      return;
+    }
+
+    const activeMeta = getCellMeta(selectedCell);
+    if (!activeMeta) {
+      return;
+    }
+
+    setCopyRange(
+      {
+        col: activeMeta.columnKey,
+        r1: activeMeta.rowIndex,
+        r2: activeMeta.rowIndex,
+      },
+      activeMeta.blockIndex
+    );
+    event.preventDefault();
+    return;
+  }
+
+  if (event.key === "Escape" && copyRange) {
+    setCopyRange(null);
+    event.preventDefault();
     return;
   }
 
@@ -1914,8 +2032,14 @@ function renderMonthBlockGrid(root) {
   ensureFillHandleElement();
 
   const rightBodyScroll = gridRoot?.querySelector("#right-body-scroll");
-  rightBodyScroll?.addEventListener("scroll", syncFillHandlePosition);
-  window.addEventListener("resize", syncFillHandlePosition);
+  rightBodyScroll?.addEventListener("scroll", () => {
+    syncFillHandlePosition();
+    syncCopyAntsPosition();
+  });
+  window.addEventListener("resize", () => {
+    syncFillHandlePosition();
+    syncCopyAntsPosition();
+  });
 }
 
 function renderRows() {
@@ -2019,6 +2143,7 @@ function renderRows() {
   });
 
   syncFillHandlePosition();
+  syncCopyAntsPosition();
 }
 
 renderMonthBlockGrid(document.getElementById("app"));
