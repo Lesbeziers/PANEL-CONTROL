@@ -288,6 +288,37 @@ body {
   visibility: visible;
 }
 
+.copy-ants {
+  position: absolute;
+  border: 2px solid transparent;
+  background-image: repeating-linear-gradient(
+    45deg,
+    #000 0 6px,
+    #fff 6px 12px
+  );
+  background-size: 16px 16px;
+  background-clip: border-box;
+  pointer-events: none;
+  z-index: 6;
+  opacity: 0;
+  visibility: hidden;
+  animation: copy-ants-marching 0.45s linear infinite;
+}
+
+.copy-ants.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+@keyframes copy-ants-marching {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 16px 0;
+  }
+}
+
 .month-block__body-grid:focus,
 .month-block__body-grid:focus-visible {
   outline: none !important;
