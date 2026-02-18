@@ -1124,6 +1124,50 @@ function handleGridPaste(event) {
     return;
   }
 
+  const hasVerticalRangeSelection =
+    !!dragSelection
+    && dragSelection.r2 > dragSelection.r1;
+
+  const isEditorActive = isEditingElement(document.activeElement);
+
+  if (hasVerticalRangeSelection && !isEditorActive) {
+    const pastedText = (event.clipboardData?.getData("text/plain") || "").replace(/\r\n/g, "\n");
+    const clipboardLines = pastedText.split("\n");
+    if (clipboardLines.length > 1 && clipboardLines[clipboardLines.length - 1] === "") {
+      clipboardLines.pop();
+    }
+
+    const normalizedLines = clipboardLines.map((line) => line.split("\t")[0]);
+    if (!normalizedLines.length) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const rangeSize = dragSelection.r2 - dragSelection.r1 + 1;
+    if (normalizedLines.length === 1) {
+      for (let rowIndex = dragSelection.r1; rowIndex <= dragSelection.r2; rowIndex += 1) {
+        const targetCell = document.querySelector(
+          `[data-block-index="${dragSelection.blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${dragSelection.col}"]`
+        );
+        if (targetCell) {
+          setCellValue(targetCell, normalizedLines[0]);
+        }
+      }
+      return;
+    }
+
+    for (let offset = 0; offset < Math.min(normalizedLines.length, rangeSize); offset += 1) {
+      const targetCell = document.querySelector(
+        `[data-block-index="${dragSelection.blockIndex}"][data-row-index="${dragSelection.r1 + offset}"][data-column-key="${dragSelection.col}"]`
+      );
+      if (targetCell) {
+        setCellValue(targetCell, normalizedLines[offset]);
+      }
+    }
+    return;
+  }
+
   const rowData = getRowByCell(selectedCell);
   if (!rowData) {
     return;
