@@ -385,6 +385,77 @@ function getAdjacentCellByArrow(cell, key) {
   return null;
 }
 
+function isCellVisible(cell) {
+  if (!cell) {
+    return false;
+  }
+
+  const styles = window.getComputedStyle(cell);
+  return styles.display !== "none" && styles.visibility !== "hidden";
+}
+
+function getRowEditableColumnKeys(rowElement) {
+  if (!rowElement) {
+    return [];
+  }
+
+  return columns
+    .filter((column) => column.editable !== false && column.visible !== false)
+    .map((column) => column.key)
+    .filter((columnKey) => {
+      const rowCell = rowElement.querySelector(`[data-column-key="${columnKey}"]`);
+      return isCellVisible(rowCell);
+    });
+}
+
+function getNextTabCell(cell, direction) {
+  const meta = getCellMeta(cell);
+  if (!meta) {
+    return null;
+  }
+
+  const block = blocks[meta.blockIndex];
+  if (!block) {
+    return null;
+  }
+
+  const currentRow = cell.parentElement;
+  const currentRowColumns = getRowEditableColumnKeys(currentRow);
+  if (!currentRowColumns.length) {
+    return null;
+  }
+
+  const currentColumnIndex = currentRowColumns.indexOf(meta.columnKey);
+  if (currentColumnIndex < 0) {
+    return null;
+  }
+
+  const nextColumnIndex = currentColumnIndex + direction;
+  if (nextColumnIndex >= 0 && nextColumnIndex < currentRowColumns.length) {
+    return currentRow.querySelector(`[data-column-key="${currentRowColumns[nextColumnIndex]}"]`);
+  }
+
+  let nextRowIndex = meta.rowIndex + direction;
+  while (nextRowIndex >= 0 && nextRowIndex < block.rows.length) {
+    const nextRow = document.querySelector(
+      `[data-block-index="${meta.blockIndex}"][data-row-index="${nextRowIndex}"]`
+    )?.parentElement;
+
+    const nextRowColumns = getRowEditableColumnKeys(nextRow);
+    if (nextRowColumns.length) {
+      const targetColumnKey = direction > 0 ? nextRowColumns[0] : nextRowColumns[nextRowColumns.length - 1];
+      const nextCell = nextRow?.querySelector(`[data-column-key="${targetColumnKey}"]`);
+      if (nextCell) {
+        return nextCell;
+      }
+    }
+
+    nextRowIndex += direction;
+  }
+
+  return cell;
+}
+
 function focusCellWithoutEditing(cell) {
   if (!cell || editingCell) {
     return;
@@ -413,6 +484,18 @@ function handleGridEnterKey(event) {
   const hasSelectedCell = !!selectedCell && !!getCellMeta(selectedCell);
 
   if (editingCell) {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      const currentCell = editingCell.cell;
+      editingCell.commit();
+      const nextCell = getNextTabCell(currentCell, event.shiftKey ? -1 : 1);
+      if (nextCell) {
+        setSelectedCell(nextCell);
+        focusCellWithoutEditing(nextCell);
+      }
+      return;
+    }
+
     if (event.key === "Enter") {
       event.preventDefault();
       const currentCell = editingCell.cell;
@@ -445,6 +528,18 @@ function handleGridEnterKey(event) {
   }
 
   if (!hasSelectedCell) {
+    return;
+  }
+
+  if (event.key === "Tab") {
+    event.preventDefault();
+    const nextCell = getNextTabCell(selectedCell, event.shiftKey ? -1 : 1);
+    if (!nextCell) {
+      return;
+    }
+
+    setSelectedCell(nextCell);
+    focusCellWithoutEditing(nextCell);
     return;
   }
 
