@@ -5,7 +5,7 @@
   const DAY_ATTR = "data-day";
   const OBSERVER_TARGET_SELECTOR = ".month-block #right-body";
   const DATE_COLUMN_SELECTOR = '.left-row > div[data-column-key="startDate"], .left-row > div[data-column-key="endDate"]';
-  const GANTT_BODY_SELECTOR = "#left-body, #right-body";
+  const GANTT_BODY_SELECTOR = "#left-body, #right-body, .month-block__body-grid";
   const BLOCK_HEADER_GREEN_CLASS = "blockHeader--green";
   const BLOCK_HEADER_YELLOW_CLASS = "blockHeader--yellow";
   const GANTT_BLOCK_HEADER_CLASS = "ganttBlockHeader";
@@ -474,7 +474,8 @@
     root.addEventListener("change", repaintFromEvent, true);
     root.addEventListener("focusout", repaintFromEvent, true);
     root.addEventListener("paste", (event) => {
-      const pastedInsideGantt = event.target?.closest?.(GANTT_BODY_SELECTOR);
+      const eventTarget = event.target instanceof Element ? event.target : null;
+      const pastedInsideGantt = eventTarget?.closest?.(GANTT_BODY_SELECTOR);
       if (!pastedInsideGantt) {
         return;
       }
