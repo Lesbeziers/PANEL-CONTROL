@@ -11,6 +11,7 @@
   const GANTT_BLOCK_HEADER_CLASS = "ganttBlockHeader";
   const GANTT_BLOCK_GREEN_CLASS = "ganttBlockGreen";
   const GANTT_BLOCK_YELLOW_CLASS = "ganttBlockYellow";
+  const BLOCK_DAY_COUNT_CLASS = "ganttBlockDayCount";
   const BAND_COLOR_GREEN = "#5b843a";
   const BAND_COLOR_YELLOW = "#d68505";
   const HEADER_COLOR_GREEN = "#70ad47";
@@ -368,7 +369,77 @@
     rangeCells[0].classList.add(RANGE_START_CLASS);
     rangeCells[rangeCells.length - 1].classList.add(RANGE_END_CLASS);
   }
-  
+
+  function updateHeaderDayCountCell(cell, count) {
+    if (!cell) {
+      return;
+    }
+
+    let countNode = cell.querySelector(`.${BLOCK_DAY_COUNT_CLASS}`);
+    if (!countNode) {
+      countNode = document.createElement("span");
+      countNode.className = BLOCK_DAY_COUNT_CLASS;
+      cell.appendChild(countNode);
+    }
+
+    countNode.textContent = count > 0 ? String(count) : "";
+  }
+
+  function renderBlockDailyCounts(dayRows, leftRows) {
+    const blockEntries = [];
+    let activeBlock = null;
+
+    dayRows.forEach((dayRow, rowIndex) => {
+      const leftRow = leftRows[rowIndex] || null;
+
+      if (dayRow.classList.contains("group")) {
+        const headerClass = ensureBlockHeaderClass(dayRow);
+        if (!headerClass) {
+          activeBlock = null;
+          return;
+        }
+
+        activeBlock = {
+          headerRow: dayRow,
+          counts: new Array(32).fill(0),
+        };
+        blockEntries.push(activeBlock);
+        return;
+      }
+
+      if (!activeBlock || !isDataRow(dayRow, leftRow)) {
+        return;
+      }
+
+      const startCell = leftRow.querySelector('[data-column-key="startDate"]');
+      const endCell = leftRow.querySelector('[data-column-key="endDate"]');
+      if (!startCell || !endCell) {
+        return;
+      }
+
+      const startDay = parseDateDay(startCell.textContent);
+      const endDay = parseDateDay(endCell.textContent);
+      if (startDay === null || endDay === null || startDay > endDay) {
+        return;
+      }
+
+      const fromDay = Math.max(1, startDay);
+      const toDay = Math.min(31, endDay);
+      for (let day = fromDay; day <= toDay; day += 1) {
+        activeBlock.counts[day] += 1;
+      }
+    });
+
+    blockEntries.forEach(({ headerRow, counts }) => {
+      const calendarCells = headerRow.querySelectorAll(`.day-cell[${DAY_ATTR}]`);
+      calendarCells.forEach((cell) => {
+        const day = Number.parseInt(cell.getAttribute(DAY_ATTR), 10);
+        const count = Number.isInteger(day) ? counts[day] : 0;
+        updateHeaderDayCountCell(cell, count);
+      });
+    });
+  }
+
   function markCalendarCells(root) {
     const headerTrack = root.querySelector("#right-header-track");
     if (!headerTrack) {
@@ -391,10 +462,6 @@
     const dayRows = [...root.querySelectorAll("#right-body .day-row")];
     const leftRows = [...root.querySelectorAll("#left-body .left-row")];
     dayRows.forEach((row, rowIndex) => {
-      if (!isDataRow(row, leftRows[rowIndex])) {
-        return;
-      }
-
       const rowCells = [...row.children];
       calendarColumns.forEach(({ columnIndex, day }) => {
         const targetCell = rowCells[columnIndex];
@@ -405,8 +472,14 @@
         targetCell.setAttribute(DAY_ATTR, String(day));
       });
 
+      if (!isDataRow(row, leftRows[rowIndex])) {
+        return;
+      }
+
       paintRangeForRow(row, leftRows[rowIndex]);
     });
+
+    renderBlockDailyCounts(dayRows, leftRows);
   }
 
   function paintSingleRowByLeftRow(root, leftRow) {
