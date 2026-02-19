@@ -22,10 +22,10 @@
   const BLOCK_DAY_BAND_CLASS = "ganttBlockDayBandVisible";
   const TOOLTIP_CLASS = "ganttBarTooltip";
   const BAR_HOVER_FOCUS_DELAY_MS = 140;
-  const BAND_COLOR_GREEN = "#5b843a";
-  const BAND_COLOR_YELLOW = "#d68505";
-  const HEADER_COLOR_GREEN = "#70ad47";
-  const HEADER_COLOR_YELLOW = "#fcc000";
+  const BAND_COLOR_GREEN = "#b5d2b3";
+  const BAND_COLOR_YELLOW = "#fbbd9a";
+  const HEADER_COLOR_GREEN = "#8fb596";
+  const HEADER_COLOR_YELLOW = "#e8cd8e";
   const DEBUG_PASTE = true;
   
   let observer = null;
