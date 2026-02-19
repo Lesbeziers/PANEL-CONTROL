@@ -43,8 +43,8 @@ function newRowForBlock(blockType) {
 }
 
 let blocks = [
-  { id: "block-1", blockType: "Promo 20", headerColor: "#70ad47", rows: [newRowForBlock("Promo 20")] },
-  { id: "block-2", blockType: "Promo 20", headerColor: "#fcc000", rows: [newRowForBlock("Promo 20")] },
+  { id: "block-1", blockType: "Promo 20", headerColor: "#8fb596", rows: [newRowForBlock("Promo 20")] },
+  { id: "block-2", blockType: "Promo 20", headerColor: "#e8cd8e", rows: [newRowForBlock("Promo 20")] },
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
