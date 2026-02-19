@@ -567,9 +567,11 @@ body {
   background: var(--header-bg);
   cursor: default;
   font-weight: 700;
+  transition: background-color 120ms ease;
 }
 
 .right-header-track .day-cell:hover {
+  background: #333333;
   font-weight: 900;
   font-size: 14px;
 }
