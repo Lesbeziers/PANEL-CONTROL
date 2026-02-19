@@ -1,6 +1,8 @@
 (function initCalendarColumnDebugModule() {
   const CALENDAR_CELL_CLASS = "isCalendarCell";
-  const RANGE_CELL_CLASS = "ganttBarCell";  
+  const RANGE_CELL_CLASS = "ganttBarCell";
+  const RANGE_START_CLASS = "ganttBarStart";
+  const RANGE_END_CLASS = "ganttBarEnd";
   const DAY_ATTR = "data-day";
   const OBSERVER_TARGET_SELECTOR = ".month-block #right-body";
   const DATE_COLUMN_SELECTOR = '.left-row > div[data-column-key="startDate"], .left-row > div[data-column-key="endDate"]';
@@ -71,6 +73,8 @@
 
     dayRow.querySelectorAll(`.day-cell.${RANGE_CELL_CLASS}`).forEach((cell) => {
       cell.classList.remove(RANGE_CELL_CLASS);
+      cell.classList.remove(RANGE_START_CLASS);
+      cell.classList.remove(RANGE_END_CLASS);
     });
   }
 
@@ -93,12 +97,21 @@
       return;
     }
 
+    const rangeCells = [];
     dayRow.querySelectorAll(`.day-cell.${CALENDAR_CELL_CLASS}[${DAY_ATTR}]`).forEach((cell) => {
       const day = Number.parseInt(cell.getAttribute(DAY_ATTR), 10);
       if (Number.isInteger(day) && day >= startDay && day <= endDay) {
         cell.classList.add(RANGE_CELL_CLASS);
+        rangeCells.push(cell);
       }
     });
+
+    if (!rangeCells.length) {
+      return;
+    }
+
+    rangeCells[0].classList.add(RANGE_START_CLASS);
+    rangeCells[rangeCells.length - 1].classList.add(RANGE_END_CLASS);
   }
   
   function markCalendarCells(root) {
@@ -116,6 +129,8 @@
     allDayCells.forEach((cell) => {
       cell.classList.remove(CALENDAR_CELL_CLASS);
       cell.classList.remove(RANGE_CELL_CLASS);
+      cell.classList.remove(RANGE_START_CLASS);
+      cell.classList.remove(RANGE_END_CLASS);
       cell.removeAttribute(DAY_ATTR);
     });
 
