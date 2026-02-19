@@ -114,6 +114,28 @@
   opacity: 0.2;
 }
 
+#right-body .day-row.ganttBlockDayDim .day-cell:not(.ganttBarCell)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: rgb(255 255 255 / 0.8);
+}
+
+#right-body .day-row.ganttBlockDayDim .day-cell.ganttBarCell::after {
+  opacity: 0.2;
+}
+
+#right-body .day-row.group .day-cell.ganttBlockDayHoverCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: rgb(0 0 0 / 0.3);
+}
+
 #left-body .left-row.ganttFocusDim > div {
   color: rgb(from currentColor r g b / 0.2);
 }
@@ -127,6 +149,14 @@
 }
 
 #left-body .left-row.ganttGlobalDayDim > div > * {
+  opacity: 0.2;
+}
+
+#left-body .left-row.ganttBlockDayDim > div {
+  color: rgb(from currentColor r g b / 0.2);
+}
+
+#left-body .left-row.ganttBlockDayDim > div > * {
   opacity: 0.2;
 }
 
@@ -204,6 +234,24 @@
 }
 
 #right-body.ganttGlobalDayBandVisible::before {
+  opacity: 1;
+}
+
+#right-body::after {
+  content: "";
+  position: absolute;
+  top: var(--ganttBlockBandTop, 0);
+  height: var(--ganttBlockBandHeight, 0);
+  left: var(--ganttBlockBandLeft, 0);
+  width: var(--ganttBlockBandWidth, 0);
+  background: rgb(107 114 128 / 0.15);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 4;
+  transition: opacity 120ms ease;
+}
+
+#right-body.ganttBlockDayBandVisible::after {
   opacity: 1;
 }
 
