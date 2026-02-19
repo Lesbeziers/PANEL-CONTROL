@@ -15,6 +15,7 @@
   const BLOCK_OVER_MAX_CLASS = "ganttOverMax";
   const FOCUS_DIM_CLASS = "ganttFocusDim";
   const FOCUS_ACTIVE_CLASS = "ganttFocusActive";
+  const GLOBAL_DAY_DIM_CLASS = "ganttGlobalDayDim";
   const TOOLTIP_CLASS = "ganttBarTooltip";
   const BAR_HOVER_FOCUS_DELAY_MS = 140;
   const BAND_COLOR_GREEN = "#5b843a";
@@ -30,6 +31,9 @@
   let focusTooltip = null;
   let hoverFocusTimerId = null;
   let pendingHoverFocusRow = null;
+  let headerHoverTimerId = null;
+  let pendingHeaderHoverDay = null;
+  let activeHeaderHoverDay = null;
   
   let repaintRafId = null;
   let repaintRafId2 = null;
@@ -695,6 +699,64 @@
     }
   }
 
+    function rowIncludesDay(root, dayRow, day) {
+    const leftRow = getLeftRowForDayRow(root, dayRow);
+    if (!isDataRow(dayRow, leftRow)) {
+      return false;
+    }
+
+    const startText = leftRow.querySelector('[data-column-key="startDate"]')?.textContent || "";
+    const endText = leftRow.querySelector('[data-column-key="endDate"]')?.textContent || "";
+    const startDay = parseDateDay(startText);
+    const endDay = parseDateDay(endText);
+    if (startDay === null || endDay === null || startDay > endDay) {
+      return false;
+    }
+
+    return day >= startDay && day <= endDay;
+  }
+
+  function clearGlobalHeaderDayFocus(root) {
+    if (headerHoverTimerId !== null) {
+      window.clearTimeout(headerHoverTimerId);
+      headerHoverTimerId = null;
+    }
+
+    pendingHeaderHoverDay = null;
+    activeHeaderHoverDay = null;
+
+    const dayRows = root.querySelectorAll(`#right-body .day-row.${GLOBAL_DAY_DIM_CLASS}`);
+    dayRows.forEach((dayRow) => {
+      dayRow.classList.remove(GLOBAL_DAY_DIM_CLASS);
+    });
+
+    const leftRows = root.querySelectorAll(`#left-body .left-row.${GLOBAL_DAY_DIM_CLASS}`);
+    leftRows.forEach((leftRow) => {
+      leftRow.classList.remove(GLOBAL_DAY_DIM_CLASS);
+    });
+  }
+
+  function applyGlobalHeaderDayFocus(root, day) {
+    if (activeHeaderHoverDay === day) {
+      return;
+    }
+
+    activeHeaderHoverDay = day;
+    const dayRows = [...root.querySelectorAll("#right-body .day-row")];
+    dayRows.forEach((dayRow) => {
+      const leftRow = getLeftRowForDayRow(root, dayRow);
+      if (!isDataRow(dayRow, leftRow)) {
+        dayRow.classList.remove(GLOBAL_DAY_DIM_CLASS);
+        leftRow?.classList.remove(GLOBAL_DAY_DIM_CLASS);
+        return;
+      }
+
+      const includesDay = rowIncludesDay(root, dayRow, day);
+      dayRow.classList.toggle(GLOBAL_DAY_DIM_CLASS, !includesDay);
+      leftRow.classList.toggle(GLOBAL_DAY_DIM_CLASS, !includesDay);
+    });
+  }
+
   function applyBlockFocus(root, dayRow) {
     if (activeFocusRow === dayRow) {
       return;
@@ -798,6 +860,53 @@
       }
 
       clearBlockFocus(root);
+    }, true);
+
+    root.addEventListener("mouseover", (event) => {
+      const headerCell = event.target instanceof Element ? event.target.closest("#right-header-track .day-cell") : null;
+      if (!headerCell) {
+        return;
+      }
+
+      const day = parseDayLabel(headerCell.getAttribute(DAY_ATTR) || headerCell.textContent);
+      if (day === null) {
+        return;
+      }
+
+      if (activeHeaderHoverDay === day || pendingHeaderHoverDay === day) {
+        return;
+      }
+
+      if (headerHoverTimerId !== null) {
+        window.clearTimeout(headerHoverTimerId);
+      }
+
+      pendingHeaderHoverDay = day;
+      headerHoverTimerId = window.setTimeout(() => {
+        headerHoverTimerId = null;
+        const dayToFocus = pendingHeaderHoverDay;
+        pendingHeaderHoverDay = null;
+        if (!Number.isInteger(dayToFocus)) {
+          return;
+        }
+
+        clearBlockFocus(root);
+        applyGlobalHeaderDayFocus(root, dayToFocus);
+      }, BAR_HOVER_FOCUS_DELAY_MS);
+    }, true);
+
+    root.addEventListener("mouseout", (event) => {
+      const fromHeaderCell = event.target instanceof Element ? event.target.closest("#right-header-track .day-cell") : null;
+      if (!fromHeaderCell) {
+        return;
+      }
+
+      const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
+      if (related?.closest?.("#right-header-track .day-cell")) {
+        return;
+      }
+
+      clearGlobalHeaderDayFocus(root);
     }, true);
   }
 
