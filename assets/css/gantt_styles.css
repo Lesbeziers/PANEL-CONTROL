@@ -76,3 +76,36 @@
 #right-body .day-row.group .day-cell.ganttOverMax .ganttBlockDayCount {
   color: #ffffff;
 }
+
+#right-body .day-row.ganttFocusDim .day-cell.ganttBarCell::after,
+#left-body .left-row.ganttFocusDim > div {
+  opacity: 0.2;
+}
+
+#right-body .day-row.ganttFocusActive .day-cell.ganttBarCell::after,
+#left-body .left-row.ganttFocusActive > div {
+  opacity: 1;
+}
+
+#right-body .day-row .day-cell.ganttBarCell::after,
+#left-body .left-row > div {
+  transition: opacity 120ms ease;
+}
+
+#right-body {
+  position: relative;
+}
+
+#right-body .ganttBarTooltip {
+  position: absolute;
+  z-index: 20;
+  background: rgba(17, 24, 39, 0.95);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+}
