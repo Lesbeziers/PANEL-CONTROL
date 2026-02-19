@@ -9,7 +9,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 2;
   pointer-events: none;
   box-shadow:
     inset -1px 0 0 var(--grid-border),
@@ -98,7 +98,16 @@
 }
 
 #right-body .day-row.ganttGlobalDayDim .day-cell {
-  opacity: 0.2;
+  opacity: 1;
+}
+
+#right-body .day-row.ganttGlobalDayDim .day-cell:not(.ganttBarCell)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: rgb(255 255 255 / 0.8);
 }
 
 #right-body .day-row.ganttGlobalDayDim .day-cell.ganttBarCell::after {
