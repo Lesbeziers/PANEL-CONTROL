@@ -4,6 +4,7 @@
   const DAY_ATTR = "data-day";
   const OBSERVER_TARGET_SELECTOR = ".month-block #right-body";
   const DATE_COLUMN_SELECTOR = '.left-row > div[data-column-key="startDate"], .left-row > div[data-column-key="endDate"]';
+  const GANTT_BODY_SELECTOR = "#left-body, #right-body";
   
   let observer = null;
   let rafId = null;
@@ -281,10 +282,12 @@
     root.addEventListener("change", repaintFromEvent, true);
     root.addEventListener("focusout", repaintFromEvent, true);
     root.addEventListener("paste", (event) => {
-      const targetCell = isDateColumnEvent(event);
-      if (targetCell) {
-        schedulePostUpdateRepaint({ full: true });
+      const pastedInsideGantt = event.target?.closest?.(GANTT_BODY_SELECTOR);
+      if (!pastedInsideGantt) {
+        return;
       }
+
+      schedulePostUpdateRepaint({ full: true });
     }, true);
     root.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") {
