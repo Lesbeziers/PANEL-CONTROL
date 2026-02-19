@@ -17,6 +17,9 @@
   const FOCUS_ACTIVE_CLASS = "ganttFocusActive";
   const GLOBAL_DAY_DIM_CLASS = "ganttGlobalDayDim";
   const GLOBAL_DAY_BAND_CLASS = "ganttGlobalDayBandVisible";
+  const BLOCK_DAY_DIM_CLASS = "ganttBlockDayDim";
+  const BLOCK_DAY_HOVER_CELL_CLASS = "ganttBlockDayHoverCell";
+  const BLOCK_DAY_BAND_CLASS = "ganttBlockDayBandVisible";
   const TOOLTIP_CLASS = "ganttBarTooltip";
   const BAR_HOVER_FOCUS_DELAY_MS = 140;
   const BAND_COLOR_GREEN = "#5b843a";
@@ -35,7 +38,10 @@
   let headerHoverTimerId = null;
   let pendingHeaderHoverDay = null;
   let activeHeaderHoverDay = null;
-
+  let blockDayHoverTimerId = null;
+  let pendingBlockDayHover = null;
+  let activeBlockDayHover = null;
+  
   let activeHeaderHoverCell = null;
 
   function getGlobalBandHeight(rightBody) {
@@ -88,6 +94,55 @@
     rightBody.style.removeProperty("--ganttGlobalBandWidth");
     rightBody.style.removeProperty("--ganttGlobalBandHeight");
     activeHeaderHoverCell = null;
+  }
+
+  function updateBlockDayBandPosition(root) {
+    const rightBody = root.querySelector("#right-body");
+    if (!rightBody || !activeBlockDayHover) {
+      return;
+    }
+
+    const { headerCell, headerRow, blockRows } = activeBlockDayHover;
+    if (!headerCell || !headerRow || !rightBody.contains(headerCell) || !rightBody.contains(headerRow)) {
+      return;
+    }
+
+    const bodyRect = rightBody.getBoundingClientRect();
+    const cellRect = headerCell.getBoundingClientRect();
+    const bandLeft = cellRect.left - bodyRect.left + rightBody.scrollLeft;
+    const bandWidth = cellRect.width;
+    const bandTop = headerRow.offsetTop;
+    const lastBlockRow = blockRows[blockRows.length - 1] || headerRow;
+    const blockBottom = lastBlockRow.offsetTop + lastBlockRow.offsetHeight;
+    const bandHeight = Math.max(headerRow.offsetHeight, blockBottom - bandTop);
+
+    rightBody.style.setProperty("--ganttBlockBandTop", `${bandTop}px`);
+    rightBody.style.setProperty("--ganttBlockBandHeight", `${bandHeight}px`);
+    rightBody.style.setProperty("--ganttBlockBandLeft", `${bandLeft}px`);
+    rightBody.style.setProperty("--ganttBlockBandWidth", `${bandWidth}px`);
+  }
+
+  function clearBlockDayBand(root) {
+    const rightBody = root.querySelector("#right-body");
+    if (!rightBody) {
+      return;
+    }
+
+    rightBody.classList.remove(BLOCK_DAY_BAND_CLASS);
+    rightBody.style.removeProperty("--ganttBlockBandTop");
+    rightBody.style.removeProperty("--ganttBlockBandHeight");
+    rightBody.style.removeProperty("--ganttBlockBandLeft");
+    rightBody.style.removeProperty("--ganttBlockBandWidth");
+  }
+
+  function applyBlockDayBand(root) {
+    const rightBody = root.querySelector("#right-body");
+    if (!rightBody || !activeBlockDayHover) {
+      return;
+    }
+
+    updateBlockDayBandPosition(root);
+    rightBody.classList.add(BLOCK_DAY_BAND_CLASS);
   }
 
   function applyGlobalHeaderDayBand(root, headerCell) {
@@ -651,6 +706,14 @@
     return blockRows;
   }
 
+    function getBlockRows(root, headerRow) {
+    if (!headerRow?.classList.contains("group")) {
+      return [];
+    }
+
+    return [headerRow, ...getBlockDataRows(root, headerRow)];
+  }
+
   function getLeftRowForDayRow(root, dayRow) {
     const rowIndex = getRowIndexByElement(root, dayRow, "#right-body .day-row");
     if (rowIndex < 0) {
@@ -886,12 +949,129 @@
     tooltip.style.top = `${Math.max(4, top)}px`;
   }
 
+    function clearBlockDayFocus(root) {
+    if (blockDayHoverTimerId !== null) {
+      window.clearTimeout(blockDayHoverTimerId);
+      blockDayHoverTimerId = null;
+    }
+
+    pendingBlockDayHover = null;
+
+    if (activeBlockDayHover) {
+      const { dimRows, hoveredHeaderCell } = activeBlockDayHover;
+      dimRows.forEach((dayRow) => {
+        dayRow.classList.remove(BLOCK_DAY_DIM_CLASS);
+        const leftRow = getLeftRowForDayRow(root, dayRow);
+        leftRow?.classList.remove(BLOCK_DAY_DIM_CLASS);
+      });
+
+      hoveredHeaderCell?.classList.remove(BLOCK_DAY_HOVER_CELL_CLASS);
+    }
+
+    activeBlockDayHover = null;
+    clearBlockDayBand(root);
+  }
+
+  function applyBlockDayFocus(root, headerRow, headerCell, day) {
+    clearBlockDayFocus(root);
+
+    const blockDataRows = getBlockDataRows(root, headerRow).filter((row) => {
+      const leftRow = getLeftRowForDayRow(root, row);
+      return isDataRow(row, leftRow);
+    });
+
+    if (!blockDataRows.length) {
+      return;
+    }
+
+    const dimRows = [];
+    blockDataRows.forEach((dayRow) => {
+      const includesDay = rowIncludesDay(root, dayRow, day);
+      if (includesDay) {
+        return;
+      }
+
+      dayRow.classList.add(BLOCK_DAY_DIM_CLASS);
+      const leftRow = getLeftRowForDayRow(root, dayRow);
+      leftRow?.classList.add(BLOCK_DAY_DIM_CLASS);
+      dimRows.push(dayRow);
+    });
+
+    headerCell.classList.add(BLOCK_DAY_HOVER_CELL_CLASS);
+    activeBlockDayHover = {
+      hoveredHeaderCell: headerCell,
+      headerCell,
+      headerRow,
+      day,
+      dimRows,
+      blockRows: getBlockRows(root, headerRow),
+    };
+    applyBlockDayBand(root);
+  }
+
   function attachHoverFocusListeners(root) {
+    root.addEventListener("mouseover", (event) => {
+      const blockHeaderDayCell = event.target instanceof Element ? event.target.closest("#right-body .day-row.group .day-cell") : null;
+      if (!blockHeaderDayCell) {
+        return;
+      }
+
+      const day = parseDayLabel(blockHeaderDayCell.getAttribute(DAY_ATTR) || blockHeaderDayCell.textContent);
+      const headerRow = blockHeaderDayCell.closest(".day-row.group");
+      const countText = blockHeaderDayCell.querySelector(`.${BLOCK_DAY_COUNT_CLASS}`)?.textContent?.trim() || "";
+      if (day === null || !headerRow || !countText) {
+        return;
+      }
+
+      if (
+        activeBlockDayHover
+        && activeBlockDayHover.day === day
+        && activeBlockDayHover.headerRow === headerRow
+        && activeBlockDayHover.hoveredHeaderCell === blockHeaderDayCell
+      ) {
+        return;
+      }
+
+      if (blockDayHoverTimerId !== null) {
+        window.clearTimeout(blockDayHoverTimerId);
+      }
+
+      pendingBlockDayHover = { day, headerRow, blockHeaderDayCell };
+      blockDayHoverTimerId = window.setTimeout(() => {
+        blockDayHoverTimerId = null;
+        const pendingHover = pendingBlockDayHover;
+        pendingBlockDayHover = null;
+        if (!pendingHover) {
+          return;
+        }
+
+        clearBlockFocus(root);
+        clearGlobalHeaderDayFocus(root);
+        applyBlockDayFocus(root, pendingHover.headerRow, pendingHover.blockHeaderDayCell, pendingHover.day);
+      }, BAR_HOVER_FOCUS_DELAY_MS);
+    }, true);
+
+    root.addEventListener("mouseout", (event) => {
+      const fromBlockHeaderDayCell = event.target instanceof Element ? event.target.closest("#right-body .day-row.group .day-cell") : null;
+      if (!fromBlockHeaderDayCell) {
+        return;
+      }
+
+      const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
+      if (related?.closest?.("#right-body .day-row.group .day-cell")) {
+        return;
+      }
+
+      clearBlockDayFocus(root);
+    }, true);
+
     root.addEventListener("mouseover", (event) => {
       const targetCell = event.target instanceof Element ? event.target.closest(`.day-cell.${RANGE_CELL_CLASS}`) : null;
       if (!targetCell) {
         return;
       }
+
+      clearBlockDayFocus(root);
 
       const dayRow = targetCell.closest(".day-row");
       if (!dayRow || dayRow.classList.contains("group")) {
@@ -960,6 +1140,7 @@
         }
 
         clearBlockFocus(root);
+        clearBlockDayFocus(root);
         applyGlobalHeaderDayBand(root, headerCell);
         applyGlobalHeaderDayFocus(root, dayToFocus);
       }, BAR_HOVER_FOCUS_DELAY_MS);
@@ -980,19 +1161,31 @@
     }, true);
 
     root.addEventListener("scroll", () => {
-      if (activeHeaderHoverDay === null) {
+      if (activeHeaderHoverDay === null && !activeBlockDayHover) {
         return;
       }
 
-      updateGlobalHeaderDayBandPosition(root);
+      if (activeHeaderHoverDay !== null) {
+        updateGlobalHeaderDayBandPosition(root);
+      }
+
+      if (activeBlockDayHover) {
+        updateBlockDayBandPosition(root);
+      }
     }, true);
 
     window.addEventListener("resize", () => {
-      if (activeHeaderHoverDay === null) {
+      if (activeHeaderHoverDay === null && !activeBlockDayHover) {
         return;
       }
 
-      updateGlobalHeaderDayBandPosition(root);
+      if (activeHeaderHoverDay !== null) {
+        updateGlobalHeaderDayBandPosition(root);
+      }
+
+      if (activeBlockDayHover) {
+        updateBlockDayBandPosition(root);
+      }
     });
   }
 
