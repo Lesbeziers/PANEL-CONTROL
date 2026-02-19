@@ -564,6 +564,12 @@ body {
 
 .right-header-track .day-cell {
   background: var(--header-bg);
+  cursor: default;
+  font-weight: 700;
+}
+
+.right-header-track .day-cell:hover {
+  font-weight: 900;
 }
 
 .right-header-track .day-cell.inactive {
