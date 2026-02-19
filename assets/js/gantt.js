@@ -7,7 +7,12 @@
   
   let observer = null;
   let rafId = null;
-  
+
+  let repaintRafId = null;
+  let repaintRafId2 = null;
+  let repaintTimeoutId = null;
+  let pendingFullRepaint = false;
+  const pendingRowsToRepaint = new Set();
   function parseDayLabel(value) {
     const normalized = (value || "").trim();
     if (!/^\d{1,2}$/.test(normalized)) {
@@ -155,6 +160,14 @@
     paintRangeForRow(dayRow, leftRow);
   }
 
+  function paintAllRows(root) {
+    const dayRows = [...root.querySelectorAll("#right-body .day-row")];
+    const leftRows = [...root.querySelectorAll("#left-body .left-row")];
+    dayRows.forEach((dayRow, rowIndex) => {
+      paintRangeForRow(dayRow, leftRows[rowIndex]);
+    });
+  }
+
   function isDataRow(dayRow, leftRow) {
     if (!dayRow || dayRow.classList.contains("group")) {
       return false;
@@ -206,8 +219,52 @@
   }
 
   function attachDateEditRepaintListeners(root) {
-    const repaintFromEvent = (event) => {
+    const flushPendingRepaint = () => {
+      repaintRafId = null;
+      repaintRafId2 = null;
+      repaintTimeoutId = null;
+
+      if (pendingFullRepaint) {
+        pendingRowsToRepaint.clear();
+        pendingFullRepaint = false;
+        paintAllRows(root);
+        return;
+      }
+
+      const rowsToRepaint = [...pendingRowsToRepaint];
+      pendingRowsToRepaint.clear();
+      rowsToRepaint.forEach((leftRow) => {
+        paintSingleRowByLeftRow(root, leftRow);
+      });
+    };
+
+    const schedulePostUpdateRepaint = ({ leftRow = null, full = false } = {}) => {
+      if (full) {
+        pendingFullRepaint = true;
+      } else if (leftRow) {
+        pendingRowsToRepaint.add(leftRow);
+      } else {
+        pendingFullRepaint = true;
+      }
+
+      if (repaintRafId !== null || repaintRafId2 !== null || repaintTimeoutId !== null) {
+        return;
+      }
+
+      repaintRafId = window.requestAnimationFrame(() => {
+        repaintRafId2 = window.requestAnimationFrame(() => {
+          repaintTimeoutId = window.setTimeout(flushPendingRepaint, 0);
+        });
+      });
+    };
+
+    const isDateColumnEvent = (event) => {
       const targetCell = event.target?.closest?.(DATE_COLUMN_SELECTOR);
+      return targetCell || null;
+    };
+
+    const repaintFromEvent = (event) => {
+      const targetCell = isDateColumnEvent(event);
       if (!targetCell) {
         return;
       }
@@ -217,18 +274,25 @@
         return;
       }
 
-      window.requestAnimationFrame(() => {
-        paintSingleRowByLeftRow(root, leftRow);
-      });
+      schedulePostUpdateRepaint({ leftRow });
     };
 
-    root.addEventListener("focusout", repaintFromEvent);
+    root.addEventListener("input", repaintFromEvent, true);
+    root.addEventListener("change", repaintFromEvent, true);
+    root.addEventListener("focusout", repaintFromEvent, true);
+    root.addEventListener("paste", (event) => {
+      const targetCell = isDateColumnEvent(event);
+      if (targetCell) {
+        schedulePostUpdateRepaint({ full: true });
+      }
+    }, true);
     root.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") {
         return;
       }
+      
       repaintFromEvent(event);
-    });
+    }, true);
   }
 
   function run() {
