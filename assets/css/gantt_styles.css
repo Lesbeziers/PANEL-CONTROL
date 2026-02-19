@@ -68,3 +68,11 @@
   pointer-events: none;
   z-index: 3;
 }
+
+#right-body .day-row.group .day-cell.ganttOverMax {
+  background: #c62828;
+}
+
+#right-body .day-row.group .day-cell.ganttOverMax .ganttBlockDayCount {
+  color: #ffffff;
+}
