@@ -34,6 +34,45 @@
   let headerHoverTimerId = null;
   let pendingHeaderHoverDay = null;
   let activeHeaderHoverDay = null;
+
+    let activeHeaderHoverCell = null;
+
+  function updateGlobalHeaderDayBandPosition(root) {
+    const rightBody = root.querySelector("#right-body");
+    if (!rightBody || !activeHeaderHoverCell || !rightBody.contains(activeHeaderHoverCell)) {
+      return;
+    }
+
+    const bodyRect = rightBody.getBoundingClientRect();
+    const cellRect = activeHeaderHoverCell.getBoundingClientRect();
+    const bandLeft = cellRect.left - bodyRect.left + rightBody.scrollLeft;
+
+    rightBody.style.setProperty("--ganttGlobalBandLeft", `${bandLeft}px`);
+    rightBody.style.setProperty("--ganttGlobalBandWidth", `${cellRect.width}px`);
+  }
+
+  function clearGlobalHeaderDayBand(root) {
+    const rightBody = root.querySelector("#right-body");
+    if (!rightBody) {
+      return;
+    }
+
+    rightBody.classList.remove(GLOBAL_DAY_BAND_CLASS);
+    rightBody.style.removeProperty("--ganttGlobalBandLeft");
+    rightBody.style.removeProperty("--ganttGlobalBandWidth");
+    activeHeaderHoverCell = null;
+  }
+
+  function applyGlobalHeaderDayBand(root, headerCell) {
+    const rightBody = root.querySelector("#right-body");
+    if (!rightBody || !headerCell) {
+      return;
+    }
+
+    activeHeaderHoverCell = headerCell;
+    updateGlobalHeaderDayBandPosition(root);
+    rightBody.classList.add(GLOBAL_DAY_BAND_CLASS);
+  }
   
   let repaintRafId = null;
   let repaintRafId2 = null;
@@ -724,7 +763,8 @@
 
     pendingHeaderHoverDay = null;
     activeHeaderHoverDay = null;
-
+    clearGlobalHeaderDayBand(root);
+    
     const dayRows = root.querySelectorAll(`#right-body .day-row.${GLOBAL_DAY_DIM_CLASS}`);
     dayRows.forEach((dayRow) => {
       dayRow.classList.remove(GLOBAL_DAY_DIM_CLASS);
@@ -891,6 +931,7 @@
         }
 
         clearBlockFocus(root);
+        applyGlobalHeaderDayBand(root, headerCell);
         applyGlobalHeaderDayFocus(root, dayToFocus);
       }, BAR_HOVER_FOCUS_DELAY_MS);
     }, true);
@@ -908,6 +949,22 @@
 
       clearGlobalHeaderDayFocus(root);
     }, true);
+
+    root.addEventListener("scroll", () => {
+      if (activeHeaderHoverDay === null) {
+        return;
+      }
+
+      updateGlobalHeaderDayBandPosition(root);
+    }, true);
+
+    window.addEventListener("resize", () => {
+      if (activeHeaderHoverDay === null) {
+        return;
+      }
+
+      updateGlobalHeaderDayBandPosition(root);
+    });
   }
 
   function isDataRow(dayRow, leftRow) {
