@@ -8,8 +8,13 @@
   const GANTT_BODY_SELECTOR = "#left-body, #right-body";
   const BLOCK_HEADER_GREEN_CLASS = "blockHeader--green";
   const BLOCK_HEADER_YELLOW_CLASS = "blockHeader--yellow";
+  const GANTT_BLOCK_HEADER_CLASS = "ganttBlockHeader";
+  const GANTT_BLOCK_GREEN_CLASS = "ganttBlockGreen";
+  const GANTT_BLOCK_YELLOW_CLASS = "ganttBlockYellow";
   const BAND_COLOR_GREEN = "#5b843a";
   const BAND_COLOR_YELLOW = "#d68505";
+  const HEADER_COLOR_GREEN = "#70ad47";
+  const HEADER_COLOR_YELLOW = "#fcc000";
   
   let observer = null;
   let rafId = null;
@@ -81,29 +86,71 @@
     });
   }
 
-  function getPreviousElementAcrossContainers(element, stopAtSelector) {
+  function normalizeColor(value) {
+    const normalized = (value || "").trim().toLowerCase();
+    if (!normalized) {
+      return "";
+    }
+
+    if (normalized.startsWith("#")) {
+      if (normalized.length === 4) {
+        const [r, g, b] = normalized.slice(1);
+        return `#${r}${r}${g}${g}${b}${b}`;
+      }
+
+      return normalized;
+    }
+
+    const rgbMatch = normalized.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (rgbMatch) {
+      const toHex = (part) => Number.parseInt(part, 10).toString(16).padStart(2, "0");
+      return `#${toHex(rgbMatch[1])}${toHex(rgbMatch[2])}${toHex(rgbMatch[3])}`;
+    }
+
+    return normalized;
+  }
+
+  function matchesColor(value, targetHex) {
+    return normalizeColor(value) === normalizeColor(targetHex);
+  }
+
+  function findLastMatchingDescendant(root, selector) {
+    if (!root) {
+      return null;
+    }
+
+    for (let child = root.lastElementChild; child; child = child.previousElementSibling) {
+      const matchInChild = findLastMatchingDescendant(child, selector);
+      if (matchInChild) {
+        return matchInChild;
+      }
+    }
+
+    if (root.matches?.(selector)) {
+      return root;
+    }
+
+    return null;
+  }
+
+  function findPreviousMatchingElementAcrossContainers(element, selector, stopContainer) {
     if (!element) {
       return null;
     }
 
     let current = element;
-    while (current && current.parentElement) {
-      const previousSibling = current.previousElementSibling;
-      if (previousSibling) {
-        let deepest = previousSibling;
-        while (deepest.lastElementChild) {
-          deepest = deepest.lastElementChild;
+    while (current && current !== stopContainer) {
+      for (let sibling = current.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
+        const candidate = findLastMatchingDescendant(sibling, selector);
+        if (candidate) {
+          return candidate;
         }
-
-        return deepest;
       }
 
       const parent = current.parentElement;
       if (stopAtSelector && parent.matches(stopAtSelector)) {
         return null;
       }
-
-      current = parent;
     }
 
     return null;
@@ -114,22 +161,52 @@
       return null;
     }
 
+        headerRow.classList.add(GANTT_BLOCK_HEADER_CLASS);
+
+    if (headerRow.classList.contains(GANTT_BLOCK_GREEN_CLASS)) {
+      return BLOCK_HEADER_GREEN_CLASS;
+    }
+
+    if (headerRow.classList.contains(GANTT_BLOCK_YELLOW_CLASS)) {
+      return BLOCK_HEADER_YELLOW_CLASS;
+    }
+
     if (headerRow.classList.contains(BLOCK_HEADER_GREEN_CLASS)) {
+      headerRow.classList.add(GANTT_BLOCK_GREEN_CLASS);
       return BLOCK_HEADER_GREEN_CLASS;
     }
 
     if (headerRow.classList.contains(BLOCK_HEADER_YELLOW_CLASS)) {
+      headerRow.classList.add(GANTT_BLOCK_YELLOW_CLASS);
       return BLOCK_HEADER_YELLOW_CLASS;
     }
 
-    const headerStyle = (headerRow.getAttribute("style") || "").toLowerCase();
-    if (headerStyle.includes("#70ad47") || headerStyle.includes("rgb(112, 173, 71)")) {
+    const inlineGroupBg = headerRow.style.getPropertyValue("--group-bg");
+    if (matchesColor(inlineGroupBg, HEADER_COLOR_GREEN)) {
       headerRow.classList.add(BLOCK_HEADER_GREEN_CLASS);
+      headerRow.classList.add(GANTT_BLOCK_GREEN_CLASS);
       return BLOCK_HEADER_GREEN_CLASS;
     }
 
-    if (headerStyle.includes("#fcc000") || headerStyle.includes("rgb(252, 192, 0)")) {
+    if (matchesColor(inlineGroupBg, HEADER_COLOR_YELLOW)) {
       headerRow.classList.add(BLOCK_HEADER_YELLOW_CLASS);
+      headerRow.classList.add(GANTT_BLOCK_YELLOW_CLASS);
+      return BLOCK_HEADER_YELLOW_CLASS;
+    }
+
+    const rowBg = window.getComputedStyle(headerRow).backgroundColor;
+    const headerCell = headerRow.querySelector(".day-cell, div");
+    const cellBg = headerCell ? window.getComputedStyle(headerCell).backgroundColor : "";
+
+    if (matchesColor(rowBg, HEADER_COLOR_GREEN) || matchesColor(cellBg, HEADER_COLOR_GREEN)) {
+      headerRow.classList.add(BLOCK_HEADER_GREEN_CLASS);
+      headerRow.classList.add(GANTT_BLOCK_GREEN_CLASS);
+      return BLOCK_HEADER_GREEN_CLASS;
+    }
+
+    if (matchesColor(rowBg, HEADER_COLOR_YELLOW) || matchesColor(cellBg, HEADER_COLOR_YELLOW)) {
+      headerRow.classList.add(BLOCK_HEADER_YELLOW_CLASS);
+      headerRow.classList.add(GANTT_BLOCK_YELLOW_CLASS);
       return BLOCK_HEADER_YELLOW_CLASS;
     }
 
@@ -137,9 +214,14 @@
   }
 
   function findNearestBlockHeader(row) {
+    const rightBody = row?.closest("#right-body");
+    if (!rightBody) {
+      return null;
+    }
+
     let cursor = row;
     while (cursor) {
-      cursor = getPreviousElementAcrossContainers(cursor, "#right-body");
+      cursor = findPreviousMatchingElementAcrossContainers(cursor, ".day-row", rightBody);
       if (!cursor) {
         return null;
       }
@@ -171,8 +253,10 @@
 
     const bandColor = getBlockBandColor(dayRow);
     if (bandColor) {
+      dayRow.style.setProperty("--ganttBarColor", bandColor);
       dayRow.style.setProperty("--gantt-band-color", bandColor);
     } else {
+      dayRow.style.removeProperty("--ganttBarColor");
       dayRow.style.removeProperty("--gantt-band-color");
     }
 
