@@ -162,11 +162,38 @@
   position: relative;
 }
 
-#right-body::before {
+#right-header-track {
+  position: relative;
+}
+
+#right-header-track::before {
   content: "";
   position: absolute;
   top: 0;
   bottom: 0;
+  left: var(--ganttGlobalBandLeft, 0);
+  width: var(--ganttGlobalBandWidth, 0);
+  background: rgb(107 114 128 / 0.4);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 120ms ease;
+}
+
+#right-header-track.ganttGlobalDayBandVisible::before {
+  opacity: 1;
+}
+
+#right-header-track .day-cell {
+  position: relative;
+  z-index: 2;
+}
+
+#right-body::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  height: var(--ganttGlobalBandHeight, 100%);
   left: var(--ganttGlobalBandLeft, 0);
   width: var(--ganttGlobalBandWidth, 0);
   background: rgb(107 114 128 / 0.24);
