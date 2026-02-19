@@ -111,7 +111,7 @@
 }
 
 #right-body .day-row.ganttGlobalDayDim .day-cell.ganttBarCell::after {
-  opacity: 1;
+  opacity: 0.2;
 }
 
 #left-body .left-row.ganttFocusDim > div {
