@@ -97,11 +97,27 @@
   opacity: 0.2;
 }
 
+#right-body .day-row.ganttGlobalDayDim .day-cell {
+  opacity: 0.2;
+}
+
+#right-body .day-row.ganttGlobalDayDim .day-cell.ganttBarCell::after {
+  opacity: 1;
+}
+
 #left-body .left-row.ganttFocusDim > div {
   color: rgb(from currentColor r g b / 0.2);
 }
 
+#left-body .left-row.ganttGlobalDayDim > div {
+  color: rgb(from currentColor r g b / 0.2);
+}
+
 #left-body .left-row.ganttFocusDim > div > * {
+  opacity: 0.2;
+}
+
+#left-body .left-row.ganttGlobalDayDim > div > * {
   opacity: 0.2;
 }
 
@@ -118,6 +134,10 @@
 }
 
 #right-body .day-row .day-cell.ganttBarCell::after {
+  transition: opacity 120ms ease;
+}
+
+#right-body .day-row .day-cell {
   transition: opacity 120ms ease;
 }
 
