@@ -1,8 +1,10 @@
 (function initCalendarColumnDebugModule() {
   const CALENDAR_CELL_CLASS = "isCalendarCell";
+  const RANGE_CELL_CLASS = "ganttBarCell";  
   const DAY_ATTR = "data-day";
   const OBSERVER_TARGET_SELECTOR = ".month-block #right-body";
-
+  const DATE_COLUMN_SELECTOR = '.left-row > div[data-column-key="startDate"], .left-row > div[data-column-key="endDate"]';
+  
   let observer = null;
   let rafId = null;
   
@@ -20,6 +22,31 @@
     return day;
   }
 
+  function parseDateDay(value) {
+    const normalized = (value || "").trim();
+    if (!normalized) {
+      return null;
+    }
+
+    let day = null;
+
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) {
+      const parts = normalized.split("-");
+      day = Number.parseInt(parts[2], 10);
+    } else if (/^\d{1,2}(?:[\/.-]\d{1,2}){0,2}$/.test(normalized)) {
+      const parts = normalized.split(/[\/.-]/);
+      day = Number.parseInt(parts[0], 10);
+    } else if (/^\d{6}$/.test(normalized) || /^\d{8}$/.test(normalized)) {
+      day = Number.parseInt(normalized.slice(0, 2), 10);
+    }
+
+    if (!Number.isInteger(day) || day < 1 || day > 31) {
+      return null;
+    }
+
+    return day;
+  }
+  
   function detectCalendarColumns(headerTrack) {
     const headerCells = [...headerTrack.children];
     return headerCells.reduce((acc, headerCell, columnIndex) => {
@@ -31,6 +58,43 @@
     }, []);
   }
 
+  function clearRangeCells(dayRow) {
+    if (!dayRow) {
+      return;
+    }
+
+    dayRow.querySelectorAll(`.day-cell.${RANGE_CELL_CLASS}`).forEach((cell) => {
+      cell.classList.remove(RANGE_CELL_CLASS);
+    });
+  }
+
+  function paintRangeForRow(dayRow, leftRow) {
+    clearRangeCells(dayRow);
+
+    if (!isDataRow(dayRow, leftRow)) {
+      return;
+    }
+
+    const startCell = leftRow.querySelector('[data-column-key="startDate"]');
+    const endCell = leftRow.querySelector('[data-column-key="endDate"]');
+    if (!startCell || !endCell) {
+      return;
+    }
+
+    const startDay = parseDateDay(startCell.textContent);
+    const endDay = parseDateDay(endCell.textContent);
+    if (startDay === null || endDay === null || startDay > endDay) {
+      return;
+    }
+
+    dayRow.querySelectorAll(`.day-cell.${CALENDAR_CELL_CLASS}[${DAY_ATTR}]`).forEach((cell) => {
+      const day = Number.parseInt(cell.getAttribute(DAY_ATTR), 10);
+      if (Number.isInteger(day) && day >= startDay && day <= endDay) {
+        cell.classList.add(RANGE_CELL_CLASS);
+      }
+    });
+  }
+  
   function markCalendarCells(root) {
     const headerTrack = root.querySelector("#right-header-track");
     if (!headerTrack) {
@@ -45,6 +109,7 @@
     const allDayCells = root.querySelectorAll("#right-body .day-row .day-cell");
     allDayCells.forEach((cell) => {
       cell.classList.remove(CALENDAR_CELL_CLASS);
+      cell.classList.remove(RANGE_CELL_CLASS);
       cell.removeAttribute(DAY_ATTR);
     });
 
@@ -65,7 +130,29 @@
         targetCell.classList.add(CALENDAR_CELL_CLASS);
         targetCell.setAttribute(DAY_ATTR, String(day));
       });
+
+      paintRangeForRow(row, leftRows[rowIndex]);
     });
+  }
+
+  function paintSingleRowByLeftRow(root, leftRow) {
+    if (!leftRow) {
+      return;
+    }
+
+    const leftRows = [...root.querySelectorAll("#left-body .left-row")];
+    const rowIndex = leftRows.indexOf(leftRow);
+    if (rowIndex < 0) {
+      return;
+    }
+
+    const dayRows = root.querySelectorAll("#right-body .day-row");
+    const dayRow = dayRows[rowIndex];
+    if (!dayRow) {
+      return;
+    }
+
+    paintRangeForRow(dayRow, leftRow);
   }
 
   function isDataRow(dayRow, leftRow) {
@@ -118,6 +205,32 @@
     });
   }
 
+  function attachDateEditRepaintListeners(root) {
+    const repaintFromEvent = (event) => {
+      const targetCell = event.target?.closest?.(DATE_COLUMN_SELECTOR);
+      if (!targetCell) {
+        return;
+      }
+
+      const leftRow = targetCell.closest(".left-row");
+      if (!leftRow) {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        paintSingleRowByLeftRow(root, leftRow);
+      });
+    };
+
+    root.addEventListener("focusout", repaintFromEvent);
+    root.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") {
+        return;
+      }
+      repaintFromEvent(event);
+    });
+  }
+
   function run() {
     const monthBlock = document.querySelector(".month-block");
     if (!monthBlock) {
@@ -126,6 +239,7 @@
 
     markCalendarCells(monthBlock);
     startCalendarMarkObserver(monthBlock);
+    attachDateEditRepaintListeners(monthBlock);
   }
 
   if (document.readyState === "loading") {
