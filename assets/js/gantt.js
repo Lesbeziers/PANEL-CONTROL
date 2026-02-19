@@ -1,5 +1,4 @@
 (function initCalendarColumnDebugModule() {
-  const CALENDAR_CELL_CLASS = "isCalendarCell";
   const RANGE_CELL_CLASS = "ganttBarCell";
   const RANGE_START_CLASS = "ganttBarStart";
   const RANGE_END_CLASS = "ganttBarEnd";
@@ -98,7 +97,7 @@
     }
 
     const rangeCells = [];
-    dayRow.querySelectorAll(`.day-cell.${CALENDAR_CELL_CLASS}[${DAY_ATTR}]`).forEach((cell) => {
+    dayRow.querySelectorAll(`.day-cell[${DAY_ATTR}]`).forEach((cell) => {
       const day = Number.parseInt(cell.getAttribute(DAY_ATTR), 10);
       if (Number.isInteger(day) && day >= startDay && day <= endDay) {
         cell.classList.add(RANGE_CELL_CLASS);
@@ -127,7 +126,6 @@
 
     const allDayCells = root.querySelectorAll("#right-body .day-row .day-cell");
     allDayCells.forEach((cell) => {
-      cell.classList.remove(CALENDAR_CELL_CLASS);
       cell.classList.remove(RANGE_CELL_CLASS);
       cell.classList.remove(RANGE_START_CLASS);
       cell.classList.remove(RANGE_END_CLASS);
@@ -148,7 +146,6 @@
           return;
         }
 
-        targetCell.classList.add(CALENDAR_CELL_CLASS);
         targetCell.setAttribute(DAY_ATTR, String(day));
       });
 
