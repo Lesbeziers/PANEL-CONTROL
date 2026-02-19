@@ -23,7 +23,7 @@
   const TOOLTIP_CLASS = "ganttBarTooltip";
   const BAR_HOVER_FOCUS_DELAY_MS = 140;
   const BAND_COLOR_GREEN = "#b5d2b3";
-  const BAND_COLOR_YELLOW = "#fbbd9a";
+  const BAND_COLOR_YELLOW = "#fbdd9a";
   const HEADER_COLOR_GREEN = "#8fb596";
   const HEADER_COLOR_YELLOW = "#e8cd8e";
   const DEBUG_PASTE = true;
