@@ -13,3 +13,7 @@
   background: rgba(15, 23, 42, 0.4);
   pointer-events: none;
 }
+
+.day-row .day-cell.ganttBarCell {
+  background: rgba(220, 38, 38, 0.28);
+}
