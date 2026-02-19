@@ -35,7 +35,7 @@
   bottom: 20%;
   left: -1px;
   right: -1px;
-  background: rgba(220, 38, 38, 0.28);
+  background: rgba(220, 38, 38, 1);
   pointer-events: none;
 }
 
