@@ -233,6 +233,8 @@ body {
 .group-title-cell {
   justify-content: space-between;
   gap: 8px;
+  cursor: default;
+  user-select: none;
 }
 
 .group-title-cell > span:first-child {
@@ -244,6 +246,9 @@ body {
   font-size: 14px;   /* (Máximo 5 simultáneas) */
   font-weight: 600;
   cursor: default;
+}
+.group-title-cell > span {
+  cursor: inherit;
 }
 
 .title-cell {
