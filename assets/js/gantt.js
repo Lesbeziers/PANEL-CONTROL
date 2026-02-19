@@ -12,6 +12,7 @@
   const GANTT_BLOCK_GREEN_CLASS = "ganttBlockGreen";
   const GANTT_BLOCK_YELLOW_CLASS = "ganttBlockYellow";
   const BLOCK_DAY_COUNT_CLASS = "ganttBlockDayCount";
+  const BLOCK_OVER_MAX_CLASS = "ganttOverMax";
   const BAND_COLOR_GREEN = "#5b843a";
   const BAND_COLOR_YELLOW = "#d68505";
   const HEADER_COLOR_GREEN = "#70ad47";
@@ -385,6 +386,27 @@
     countNode.textContent = count > 0 ? String(count) : "";
   }
 
+  function extractBlockMaxSimultaneous(value) {
+    const normalized = (value || "").replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const scopedMatch = normalized.match(/m[aá]ximo\s*(\d+)\s*simult[aá]neas/i);
+    if (scopedMatch) {
+      const scopedValue = Number.parseInt(scopedMatch[1], 10);
+      return Number.isInteger(scopedValue) ? scopedValue : null;
+    }
+
+    const fallbackMatch = normalized.match(/\(\s*m[aá]ximo[^\d]*(\d+)\s*simult[aá]neas\s*\)/i);
+    if (fallbackMatch) {
+      const fallbackValue = Number.parseInt(fallbackMatch[1], 10);
+      return Number.isInteger(fallbackValue) ? fallbackValue : null;
+    }
+
+    return null;
+  }
+
   function renderBlockDailyCounts(dayRows, leftRows) {
     const blockEntries = [];
     let activeBlock = null;
@@ -401,6 +423,7 @@
 
         activeBlock = {
           headerRow: dayRow,
+          maxSimultaneous: extractBlockMaxSimultaneous(leftRow?.textContent || ""),
           counts: new Array(32).fill(0),
         };
         blockEntries.push(activeBlock);
@@ -430,12 +453,15 @@
       }
     });
 
-    blockEntries.forEach(({ headerRow, counts }) => {
+    blockEntries.forEach(({ headerRow, counts, maxSimultaneous }) => {
       const calendarCells = headerRow.querySelectorAll(`.day-cell[${DAY_ATTR}]`);
       calendarCells.forEach((cell) => {
         const day = Number.parseInt(cell.getAttribute(DAY_ATTR), 10);
         const count = Number.isInteger(day) ? counts[day] : 0;
         updateHeaderDayCountCell(cell, count);
+
+        const isOverMax = Number.isInteger(maxSimultaneous) && count > maxSimultaneous;
+        cell.classList.toggle(BLOCK_OVER_MAX_CLASS, Boolean(isOverMax));
       });
     });
   }
