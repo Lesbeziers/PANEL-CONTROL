@@ -81,6 +81,8 @@
   font-size: 14px;
   line-height: 1;
   color: #ffffff;
+  cursor: default;
+  user-select: none;
   pointer-events: auto;
   z-index: 3;
   transition: font-size 120ms ease, font-weight 120ms ease;
