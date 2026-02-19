@@ -35,24 +35,8 @@
   bottom: 20%;
   left: -1px;
   right: -1px;
-  background: var(--gantt-band-color, #5b843a);
+  background: var(--ganttBarColor, var(--gantt-band-color, #5b843a));
   pointer-events: none;
-}
-
-#right-body .day-row.group[style*="#70ad47"] + .day-row:not(.group),
-#right-body .day-row.group[style*="#70ad47"] + .day-row:not(.group) + .day-row:not(.group),
-#right-body .day-row.group[style*="#70ad47"] + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group),
-#right-body .day-row.group[style*="#70ad47"] + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group),
-#right-body .day-row.group[style*="#70ad47"] + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group) {
-  --gantt-band-color: #5b843a;
-}
-
-#right-body .day-row.group[style*="#fcc000"] + .day-row:not(.group),
-#right-body .day-row.group[style*="#fcc000"] + .day-row:not(.group) + .day-row:not(.group),
-#right-body .day-row.group[style*="#fcc000"] + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group),
-#right-body .day-row.group[style*="#fcc000"] + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group),
-#right-body .day-row.group[style*="#fcc000"] + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group) + .day-row:not(.group) {
-  --gantt-band-color: #d68505;
 }
 
 .day-row .day-cell.ganttBarCell.ganttBarStart::after {
