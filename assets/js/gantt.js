@@ -1,7 +1,11 @@
 (function initCalendarColumnDebugModule() {
   const CALENDAR_CELL_CLASS = "isCalendarCell";
   const DAY_ATTR = "data-day";
+  const OBSERVER_TARGET_SELECTOR = ".month-block #right-body";
 
+  let observer = null;
+  let rafId = null;
+  
   function parseDayLabel(value) {
     const normalized = (value || "").trim();
     if (!/^\d{1,2}$/.test(normalized)) {
@@ -27,7 +31,7 @@
     }, []);
   }
 
-  function applyCalendarDebugMark(root) {
+  function markCalendarCells(root) {
     const headerTrack = root.querySelector("#right-header-track");
     if (!headerTrack) {
       return;
@@ -53,13 +57,50 @@
     });
   }
 
+  function scheduleMark(root) {
+    if (rafId !== null) {
+      return;
+    }
+
+    rafId = window.requestAnimationFrame(() => {
+      rafId = null;
+      markCalendarCells(root);
+    });
+  }
+
+  function startCalendarMarkObserver(root) {
+    const targetNode = root.querySelector(OBSERVER_TARGET_SELECTOR) || root.querySelector("#right-body");
+    if (!targetNode) {
+      return;
+    }
+
+    if (observer) {
+      observer.disconnect();
+    }
+
+    observer = new MutationObserver((mutationList) => {
+      const hasStructuralChange = mutationList.some((mutation) => mutation.type === "childList");
+      if (!hasStructuralChange) {
+        return;
+      }
+
+      scheduleMark(root);
+    });
+
+    observer.observe(targetNode, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
   function run() {
     const monthBlock = document.querySelector(".month-block");
     if (!monthBlock) {
       return;
     }
 
-    applyCalendarDebugMark(monthBlock);
+    markCalendarCells(monthBlock);
+    startCalendarMarkObserver(monthBlock);
   }
 
   if (document.readyState === "loading") {
