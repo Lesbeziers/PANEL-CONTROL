@@ -16,6 +16,7 @@
   const FOCUS_DIM_CLASS = "ganttFocusDim";
   const FOCUS_ACTIVE_CLASS = "ganttFocusActive";
   const TOOLTIP_CLASS = "ganttBarTooltip";
+  const BAR_HOVER_FOCUS_DELAY_MS = 140;
   const BAND_COLOR_GREEN = "#5b843a";
   const BAND_COLOR_YELLOW = "#d68505";
   const HEADER_COLOR_GREEN = "#70ad47";
@@ -27,6 +28,8 @@
   let activeFocusRow = null;
   let activeFocusBlockRows = [];
   let focusTooltip = null;
+  let hoverFocusTimerId = null;
+  let pendingHoverFocusRow = null;
   
   let repaintRafId = null;
   let repaintRafId2 = null;
@@ -670,6 +673,12 @@
   }
 
   function clearBlockFocus(root) {
+    if (hoverFocusTimerId !== null) {
+      window.clearTimeout(hoverFocusTimerId);
+      hoverFocusTimerId = null;
+      pendingHoverFocusRow = null;
+    }
+
     if (activeFocusBlockRows.length) {
       activeFocusBlockRows.forEach((blockRow) => {
         blockRow.classList.remove(FOCUS_DIM_CLASS, FOCUS_ACTIVE_CLASS);
@@ -758,7 +767,24 @@
         return;
       }
 
-      applyBlockFocus(root, dayRow);
+      if (activeFocusRow === dayRow || pendingHoverFocusRow === dayRow) {
+        return;
+      }
+
+      if (hoverFocusTimerId !== null) {
+        window.clearTimeout(hoverFocusTimerId);
+      }
+
+      pendingHoverFocusRow = dayRow;
+      hoverFocusTimerId = window.setTimeout(() => {
+        hoverFocusTimerId = null;
+        const rowToFocus = pendingHoverFocusRow;
+        pendingHoverFocusRow = null;
+        if (!rowToFocus || !root.contains(rowToFocus)) {
+          return;
+        }
+        applyBlockFocus(root, rowToFocus);
+      }, BAR_HOVER_FOCUS_DELAY_MS);
     }, true);
 
     root.addEventListener("mouseout", (event) => {
