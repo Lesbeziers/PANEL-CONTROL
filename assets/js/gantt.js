@@ -16,6 +16,7 @@
   const FOCUS_DIM_CLASS = "ganttFocusDim";
   const FOCUS_ACTIVE_CLASS = "ganttFocusActive";
   const GLOBAL_DAY_DIM_CLASS = "ganttGlobalDayDim";
+  const GLOBAL_DAY_BAND_CLASS = "ganttGlobalDayBandVisible";
   const TOOLTIP_CLASS = "ganttBarTooltip";
   const BAR_HOVER_FOCUS_DELAY_MS = 140;
   const BAND_COLOR_GREEN = "#5b843a";
