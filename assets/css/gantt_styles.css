@@ -173,7 +173,7 @@
   bottom: 0;
   left: var(--ganttGlobalBandLeft, 0);
   width: var(--ganttGlobalBandWidth, 0);
-  background: rgb(107 114 128 / 0.2);
+  background: rgb(107 114 128 / 0.6);
   pointer-events: none;
   opacity: 0;
   z-index: 1;
@@ -196,7 +196,7 @@
   height: var(--ganttGlobalBandHeight, 100%);
   left: var(--ganttGlobalBandLeft, 0);
   width: var(--ganttGlobalBandWidth, 0);
-  background: rgb(107 114 128 / 0.24);
+  background: rgb(107 114 128 / 0.15);
   pointer-events: none;
   opacity: 0;
   z-index: 4;
