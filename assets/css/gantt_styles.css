@@ -162,6 +162,24 @@
   position: relative;
 }
 
+#right-body::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--ganttGlobalBandLeft, 0);
+  width: var(--ganttGlobalBandWidth, 0);
+  background: rgb(107 114 128 / 0.18);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 120ms ease;
+}
+
+#right-body.ganttGlobalDayBandVisible::before {
+  opacity: 1;
+}
+
 #right-body .ganttBarTooltip {
   position: absolute;
   z-index: 20;
