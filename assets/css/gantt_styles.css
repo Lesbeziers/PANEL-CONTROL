@@ -173,7 +173,7 @@
   bottom: 0;
   left: var(--ganttGlobalBandLeft, 0);
   width: var(--ganttGlobalBandWidth, 0);
-  background: rgb(107 114 128 / 0.4);
+  background: rgb(107 114 128 / 0.2);
   pointer-events: none;
   opacity: 0;
   z-index: 1;
