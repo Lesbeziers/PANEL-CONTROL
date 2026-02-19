@@ -13,6 +13,9 @@
   const GANTT_BLOCK_YELLOW_CLASS = "ganttBlockYellow";
   const BLOCK_DAY_COUNT_CLASS = "ganttBlockDayCount";
   const BLOCK_OVER_MAX_CLASS = "ganttOverMax";
+  const FOCUS_DIM_CLASS = "ganttFocusDim";
+  const FOCUS_ACTIVE_CLASS = "ganttFocusActive";
+  const TOOLTIP_CLASS = "ganttBarTooltip";
   const BAND_COLOR_GREEN = "#5b843a";
   const BAND_COLOR_YELLOW = "#d68505";
   const HEADER_COLOR_GREEN = "#70ad47";
@@ -21,7 +24,10 @@
   
   let observer = null;
   let rafId = null;
-
+  let activeFocusRow = null;
+  let activeFocusBlockRows = [];
+  let focusTooltip = null;
+  
   let repaintRafId = null;
   let repaintRafId2 = null;
   let repaintTimeoutId = null;
@@ -536,6 +542,239 @@
     });
   }
 
+  function getRowIndexByElement(root, row, selector) {
+    const rows = [...root.querySelectorAll(selector)];
+    return rows.indexOf(row);
+  }
+
+  function getBlockDataRows(root, dayRow) {
+    const dayRows = [...root.querySelectorAll("#right-body .day-row")];
+    const startIndex = dayRows.indexOf(dayRow);
+    if (startIndex < 0) {
+      return [];
+    }
+
+    let blockStart = startIndex;
+    while (blockStart > 0 && !dayRows[blockStart].classList.contains("group")) {
+      blockStart -= 1;
+    }
+
+    if (!dayRows[blockStart]?.classList.contains("group")) {
+      return [];
+    }
+
+    const blockRows = [];
+    for (let index = blockStart + 1; index < dayRows.length; index += 1) {
+      const currentRow = dayRows[index];
+      if (currentRow.classList.contains("group")) {
+        break;
+      }
+
+      blockRows.push(currentRow);
+    }
+
+    return blockRows;
+  }
+
+  function getLeftRowForDayRow(root, dayRow) {
+    const rowIndex = getRowIndexByElement(root, dayRow, "#right-body .day-row");
+    if (rowIndex < 0) {
+      return null;
+    }
+
+    const leftRows = root.querySelectorAll("#left-body .left-row");
+    return leftRows[rowIndex] || null;
+  }
+
+  function parseDateFromCellValue(value) {
+    const normalized = (value || "").trim();
+    if (!normalized) {
+      return null;
+    }
+
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) {
+      const [year, month, day] = normalized.split("-").map((part) => Number.parseInt(part, 10));
+      return new Date(year, month - 1, day);
+    }
+
+    const slashMatch = normalized.match(/^(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?$/);
+    if (slashMatch) {
+      const day = Number.parseInt(slashMatch[1], 10);
+      const month = Number.parseInt(slashMatch[2], 10);
+      const yearPart = slashMatch[3];
+      const year = yearPart ? Number.parseInt(yearPart.length === 2 ? `20${yearPart}` : yearPart, 10) : new Date().getFullYear();
+      return new Date(year, month - 1, day);
+    }
+
+    const monthMap = {
+      ene: 0, enero: 0, feb: 1, febrero: 1, mar: 2, marzo: 2,
+      abr: 3, abril: 3, may: 4, mayo: 4, jun: 5, junio: 5,
+      jul: 6, julio: 6, ago: 7, agosto: 7, sep: 8, sept: 8, septiembre: 8,
+      oct: 9, octubre: 9, nov: 10, noviembre: 10, dic: 11, diciembre: 11,
+    };
+    const textMatch = normalized.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/^(\d{1,2})\s*([a-z]+)(?:\s*(\d{2,4}))?$/i);
+    if (textMatch) {
+      const day = Number.parseInt(textMatch[1], 10);
+      const month = monthMap[textMatch[2]];
+      const yearPart = textMatch[3];
+      const year = yearPart ? Number.parseInt(yearPart.length === 2 ? `20${yearPart}` : yearPart, 10) : new Date().getFullYear();
+      if (Number.isInteger(month)) {
+        return new Date(year, month, day);
+      }
+    }
+
+    return null;
+  }
+
+  function formatTooltipDate(date) {
+    const MONTHS_ES = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+    return `${String(date.getDate()).padStart(2, "0")} ${MONTHS_ES[date.getMonth()] || ""}`.trim();
+  }
+
+  function getBarDateRangeData(leftRow) {
+    if (!leftRow) {
+      return null;
+    }
+
+    const startText = leftRow.querySelector('[data-column-key="startDate"]')?.textContent?.trim() || "";
+    const endText = leftRow.querySelector('[data-column-key="endDate"]')?.textContent?.trim() || "";
+    if (!startText || !endText) {
+      return null;
+    }
+
+    const startDate = parseDateFromCellValue(startText);
+    const endDate = parseDateFromCellValue(endText);
+    if (startDate && endDate && !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
+      const oneDay = 24 * 60 * 60 * 1000;
+      const durationDays = Math.floor((endDate - startDate) / oneDay) + 1;
+      return {
+        line1: `${formatTooltipDate(startDate)} - ${formatTooltipDate(endDate)}`,
+        line2: `${Math.max(1, durationDays)} días`,
+      };
+    }
+
+    return null;
+  }
+
+  function ensureFocusTooltip(root) {
+    if (focusTooltip && root.contains(focusTooltip)) {
+      return focusTooltip;
+    }
+
+    focusTooltip = document.createElement("div");
+    focusTooltip.className = TOOLTIP_CLASS;
+    focusTooltip.hidden = true;
+    const rightBody = root.querySelector("#right-body");
+    rightBody?.appendChild(focusTooltip);
+    return focusTooltip;
+  }
+
+  function clearBlockFocus(root) {
+    if (activeFocusBlockRows.length) {
+      activeFocusBlockRows.forEach((blockRow) => {
+        blockRow.classList.remove(FOCUS_DIM_CLASS, FOCUS_ACTIVE_CLASS);
+        const leftRow = getLeftRowForDayRow(root, blockRow);
+        leftRow?.classList.remove(FOCUS_DIM_CLASS, FOCUS_ACTIVE_CLASS);
+      });
+    }
+
+    activeFocusRow = null;
+    activeFocusBlockRows = [];
+    if (focusTooltip) {
+      focusTooltip.hidden = true;
+      focusTooltip.textContent = "";
+    }
+  }
+
+  function applyBlockFocus(root, dayRow) {
+    if (activeFocusRow === dayRow) {
+      return;
+    }
+
+    clearBlockFocus(root);
+
+    const blockRows = getBlockDataRows(root, dayRow).filter((row) => {
+      const leftRow = getLeftRowForDayRow(root, row);
+      return isDataRow(row, leftRow);
+    });
+
+    if (!blockRows.length) {
+      return;
+    }
+
+    activeFocusRow = dayRow;
+    activeFocusBlockRows = blockRows;
+
+    blockRows.forEach((blockRow) => {
+      blockRow.classList.add(FOCUS_DIM_CLASS);
+      const leftRow = getLeftRowForDayRow(root, blockRow);
+      leftRow?.classList.add(FOCUS_DIM_CLASS);
+    });
+
+    dayRow.classList.remove(FOCUS_DIM_CLASS);
+    dayRow.classList.add(FOCUS_ACTIVE_CLASS);
+
+    const leftActiveRow = getLeftRowForDayRow(root, dayRow);
+    leftActiveRow?.classList.remove(FOCUS_DIM_CLASS);
+    leftActiveRow?.classList.add(FOCUS_ACTIVE_CLASS);
+
+    const tooltip = ensureFocusTooltip(root);
+    const rowRangeCells = dayRow.querySelectorAll(`.day-cell.${RANGE_CELL_CLASS}`);
+    const firstCell = rowRangeCells[0];
+    const lastCell = rowRangeCells[rowRangeCells.length - 1];
+    const tooltipData = getBarDateRangeData(leftActiveRow);
+    if (!tooltip || !firstCell || !lastCell || !tooltipData) {
+      return;
+    }
+
+    tooltip.innerHTML = `<div>${tooltipData.line1}</div><div>${tooltipData.line2}</div>`;
+    tooltip.hidden = false;
+
+    const rightBody = root.querySelector("#right-body");
+    if (!rightBody) {
+      return;
+    }
+
+    const bodyRect = rightBody.getBoundingClientRect();
+    const firstRect = firstCell.getBoundingClientRect();
+    const lastRect = lastCell.getBoundingClientRect();
+    const centerX = (firstRect.left + lastRect.right) / 2;
+    const top = firstRect.top - bodyRect.top - tooltip.offsetHeight - 8 + rightBody.scrollTop;
+    const left = centerX - bodyRect.left - tooltip.offsetWidth / 2 + rightBody.scrollLeft;
+
+    tooltip.style.left = `${Math.max(4, left)}px`;
+    tooltip.style.top = `${Math.max(4, top)}px`;
+  }
+
+  function attachHoverFocusListeners(root) {
+    root.addEventListener("mouseover", (event) => {
+      const targetCell = event.target instanceof Element ? event.target.closest(`.day-cell.${RANGE_CELL_CLASS}`) : null;
+      if (!targetCell) {
+        return;
+      }
+
+      const dayRow = targetCell.closest(".day-row");
+      if (!dayRow || dayRow.classList.contains("group")) {
+        return;
+      }
+
+      applyBlockFocus(root, dayRow);
+    }, true);
+
+    root.addEventListener("mouseout", (event) => {
+      if (!activeFocusRow) {
+        return;
+      }
+
+      const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
+      if (related?.closest?.(`.day-row.${FOCUS_ACTIVE_CLASS}, .${TOOLTIP_CLASS}`)) {
+        return;
+      }
+
+      clearBlockFocus(root);
+    }, true);
+  }
+
   function isDataRow(dayRow, leftRow) {
     if (!dayRow || dayRow.classList.contains("group")) {
       return false;
@@ -699,6 +938,7 @@
     markCalendarCells(monthBlock);
     startCalendarMarkObserver(monthBlock);
     attachDateEditRepaintListeners(monthBlock);
+    attachHoverFocusListeners(monthBlock);
   }
 
   if (document.readyState === "loading") {
