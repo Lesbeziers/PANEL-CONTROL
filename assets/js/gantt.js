@@ -6,6 +6,10 @@
   const OBSERVER_TARGET_SELECTOR = ".month-block #right-body";
   const DATE_COLUMN_SELECTOR = '.left-row > div[data-column-key="startDate"], .left-row > div[data-column-key="endDate"]';
   const GANTT_BODY_SELECTOR = "#left-body, #right-body";
+  const BLOCK_HEADER_GREEN_CLASS = "blockHeader--green";
+  const BLOCK_HEADER_YELLOW_CLASS = "blockHeader--yellow";
+  const BAND_COLOR_GREEN = "#5b843a";
+  const BAND_COLOR_YELLOW = "#d68505";
   
   let observer = null;
   let rafId = null;
@@ -77,8 +81,100 @@
     });
   }
 
+  function getPreviousElementAcrossContainers(element, stopAtSelector) {
+    if (!element) {
+      return null;
+    }
+
+    let current = element;
+    while (current && current.parentElement) {
+      const previousSibling = current.previousElementSibling;
+      if (previousSibling) {
+        let deepest = previousSibling;
+        while (deepest.lastElementChild) {
+          deepest = deepest.lastElementChild;
+        }
+
+        return deepest;
+      }
+
+      const parent = current.parentElement;
+      if (stopAtSelector && parent.matches(stopAtSelector)) {
+        return null;
+      }
+
+      current = parent;
+    }
+
+    return null;
+  }
+
+  function ensureBlockHeaderClass(headerRow) {
+    if (!headerRow || !headerRow.classList.contains("group")) {
+      return null;
+    }
+
+    if (headerRow.classList.contains(BLOCK_HEADER_GREEN_CLASS)) {
+      return BLOCK_HEADER_GREEN_CLASS;
+    }
+
+    if (headerRow.classList.contains(BLOCK_HEADER_YELLOW_CLASS)) {
+      return BLOCK_HEADER_YELLOW_CLASS;
+    }
+
+    const headerStyle = (headerRow.getAttribute("style") || "").toLowerCase();
+    if (headerStyle.includes("#70ad47") || headerStyle.includes("rgb(112, 173, 71)")) {
+      headerRow.classList.add(BLOCK_HEADER_GREEN_CLASS);
+      return BLOCK_HEADER_GREEN_CLASS;
+    }
+
+    if (headerStyle.includes("#fcc000") || headerStyle.includes("rgb(252, 192, 0)")) {
+      headerRow.classList.add(BLOCK_HEADER_YELLOW_CLASS);
+      return BLOCK_HEADER_YELLOW_CLASS;
+    }
+
+    return null;
+  }
+
+  function findNearestBlockHeader(row) {
+    let cursor = row;
+    while (cursor) {
+      cursor = getPreviousElementAcrossContainers(cursor, "#right-body");
+      if (!cursor) {
+        return null;
+      }
+
+      if (cursor.classList?.contains("group")) {
+        return cursor;
+      }
+    }
+
+    return null;
+  }
+
+  function getBlockBandColor(row) {
+    const headerRow = findNearestBlockHeader(row);
+    const headerClass = ensureBlockHeaderClass(headerRow);
+    if (headerClass === BLOCK_HEADER_YELLOW_CLASS) {
+      return BAND_COLOR_YELLOW;
+    }
+
+    if (headerClass === BLOCK_HEADER_GREEN_CLASS) {
+      return BAND_COLOR_GREEN;
+    }
+
+    return null;
+  }
+
   function paintRangeForRow(dayRow, leftRow) {
     clearRangeCells(dayRow);
+
+    const bandColor = getBlockBandColor(dayRow);
+    if (bandColor) {
+      dayRow.style.setProperty("--gantt-band-color", bandColor);
+    } else {
+      dayRow.style.removeProperty("--gantt-band-color");
+    }
 
     if (!isDataRow(dayRow, leftRow)) {
       return;
