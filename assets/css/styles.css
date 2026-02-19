@@ -243,6 +243,7 @@ body {
 .group-title-cell > span:last-child {
   font-size: 14px;   /* (Máximo 5 simultáneas) */
   font-weight: 600;
+  cursor: default;
 }
 
 .title-cell {
