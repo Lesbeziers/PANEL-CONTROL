@@ -42,8 +42,19 @@
       return;
     }
 
-    const dayRows = root.querySelectorAll("#right-body .day-row");
-    dayRows.forEach((row) => {
+    const allDayCells = root.querySelectorAll("#right-body .day-row .day-cell");
+    allDayCells.forEach((cell) => {
+      cell.classList.remove(CALENDAR_CELL_CLASS);
+      cell.removeAttribute(DAY_ATTR);
+    });
+
+    const dayRows = [...root.querySelectorAll("#right-body .day-row")];
+    const leftRows = [...root.querySelectorAll("#left-body .left-row")];
+    dayRows.forEach((row, rowIndex) => {
+      if (!isDataRow(row, leftRows[rowIndex])) {
+        return;
+      }
+
       const rowCells = [...row.children];
       calendarColumns.forEach(({ columnIndex, day }) => {
         const targetCell = rowCells[columnIndex];
@@ -55,6 +66,20 @@
         targetCell.setAttribute(DAY_ATTR, String(day));
       });
     });
+  }
+
+  function isDataRow(dayRow, leftRow) {
+    if (!dayRow || dayRow.classList.contains("group")) {
+      return false;
+    }
+
+    if (!leftRow || leftRow.classList.contains("group")) {
+      return false;
+    }
+
+    const hasListoCheckbox = leftRow.querySelector('input[type="checkbox"].listo-checkbox');
+    const hasEditableTitleCell = leftRow.querySelector('.title-cell[data-column-key="title"], .title-cell__input, .title-cell__text');
+    return Boolean(hasListoCheckbox || hasEditableTitleCell);
   }
 
   function scheduleMark(root) {
