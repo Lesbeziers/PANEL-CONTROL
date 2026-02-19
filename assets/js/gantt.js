@@ -15,6 +15,7 @@
   const BAND_COLOR_YELLOW = "#d68505";
   const HEADER_COLOR_GREEN = "#70ad47";
   const HEADER_COLOR_YELLOW = "#fcc000";
+  const DEBUG_PASTE = true;
   
   let observer = null;
   let rafId = null;
@@ -22,8 +23,83 @@
   let repaintRafId = null;
   let repaintRafId2 = null;
   let repaintTimeoutId = null;
+  let stableRepaintRunId = 0;
   let pendingFullRepaint = false;
   const pendingRowsToRepaint = new Set();
+
+  function waitPostRenderTick() {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.setTimeout(resolve, 16);
+      });
+    });
+  }
+
+  function getStartEndHash(root) {
+    const leftRows = [...root.querySelectorAll("#left-body .left-row")];
+    const dayRows = [...root.querySelectorAll("#right-body .day-row")];
+    const pairs = [];
+
+    leftRows.forEach((leftRow, rowIndex) => {
+      if (!isDataRow(dayRows[rowIndex], leftRow)) {
+        return;
+      }
+
+      const startText = leftRow.querySelector('[data-column-key="startDate"]')?.textContent?.trim() || "";
+      const endText = leftRow.querySelector('[data-column-key="endDate"]')?.textContent?.trim() || "";
+      pairs.push(`${startText}→${endText}`);
+    });
+
+    return pairs.join("||");
+  }
+
+  function repaintAll(root) {
+    paintAllRows(root);
+  }
+
+  async function repaintUntilStable(root, { maxMs = 600 } = {}) {
+    const runId = ++stableRepaintRunId;
+    const startedAt = performance.now();
+    let previousHash = null;
+    let stableIterations = 0;
+    let iteration = 0;
+
+    while (performance.now() - startedAt <= maxMs) {
+      if (runId !== stableRepaintRunId) {
+        return;
+      }
+
+      iteration += 1;
+      repaintAll(root);
+      await waitPostRenderTick();
+
+      const currentHash = getStartEndHash(root);
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      if (DEBUG_PASTE) {
+        console.log("[gantt][paste] repaint iter", iteration, "hash", currentHash, "ms", elapsedMs);
+      }
+
+      if (currentHash === previousHash) {
+        stableIterations += 1;
+      } else {
+        stableIterations = 0;
+      }
+
+      if (stableIterations >= 2) {
+        if (DEBUG_PASTE) {
+          console.log("[gantt][paste] stable after", iteration, "iterations and", elapsedMs, "ms");
+        }
+        return;
+      }
+
+      previousHash = currentHash;
+    }
+
+    if (DEBUG_PASTE) {
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      console.log("[gantt][paste] stop by maxMs after", iteration, "iterations and", elapsedMs, "ms");
+    }
+  }
   function parseDayLabel(value) {
     const normalized = (value || "").trim();
     if (!/^\d{1,2}$/.test(normalized)) {
@@ -482,6 +558,30 @@
 
       schedulePostUpdateRepaint({ full: true });
     }, true);
+
+    const handleDocumentPaste = (event) => {
+      const eventTarget = event.target instanceof Element ? event.target : null;
+      const targetInsideMonthBlock = eventTarget?.closest?.(".month-block") || root.contains(eventTarget);
+      if (!targetInsideMonthBlock) {
+        return;
+      }
+
+      if (DEBUG_PASTE) {
+        console.log("[gantt][paste] detected", event.type, "on", event.target);
+      }
+
+      repaintUntilStable(root, { maxMs: 600 });
+    };
+
+    document.addEventListener("paste", handleDocumentPaste, true);
+    document.addEventListener("beforeinput", (event) => {
+      if (event.inputType !== "insertFromPaste") {
+        return;
+      }
+
+      handleDocumentPaste(event);
+    }, true);
+
     root.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") {
         return;
