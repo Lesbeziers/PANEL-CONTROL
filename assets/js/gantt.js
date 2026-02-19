@@ -949,7 +949,7 @@
     tooltip.style.top = `${Math.max(4, top)}px`;
   }
 
-    function clearBlockDayFocus(root) {
+  function clearBlockDayFocus(root) {
     if (blockDayHoverTimerId !== null) {
       window.clearTimeout(blockDayHoverTimerId);
       blockDayHoverTimerId = null;
@@ -958,7 +958,7 @@
     pendingBlockDayHover = null;
 
     if (activeBlockDayHover) {
-      const { dimRows, hoveredHeaderCell } = activeBlockDayHover;
+      const { dimRows, hoveredHeaderCell, hoveredGlobalHeaderCell } = activeBlockDayHover;
       dimRows.forEach((dayRow) => {
         dayRow.classList.remove(BLOCK_DAY_DIM_CLASS);
         const leftRow = getLeftRowForDayRow(root, dayRow);
@@ -966,6 +966,7 @@
       });
 
       hoveredHeaderCell?.classList.remove(BLOCK_DAY_HOVER_CELL_CLASS);
+      hoveredGlobalHeaderCell?.classList.remove(BLOCK_DAY_HOVER_CELL_CLASS);
     }
 
     activeBlockDayHover = null;
@@ -996,10 +997,17 @@
       leftRow?.classList.add(BLOCK_DAY_DIM_CLASS);
       dimRows.push(dayRow);
     });
+    
+    const globalHeaderCell = [...root.querySelectorAll("#right-header-track .day-cell")].find((cell) => {
+      const cellDay = parseDayLabel(cell.getAttribute(DAY_ATTR) || cell.textContent);
+      return cellDay === day;
+    }) || null;
 
     headerCell.classList.add(BLOCK_DAY_HOVER_CELL_CLASS);
+    globalHeaderCell?.classList.add(BLOCK_DAY_HOVER_CELL_CLASS);
     activeBlockDayHover = {
       hoveredHeaderCell: headerCell,
+      hoveredGlobalHeaderCell: globalHeaderCell,
       headerCell,
       headerRow,
       day,
