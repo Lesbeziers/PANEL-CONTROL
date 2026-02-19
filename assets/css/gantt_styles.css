@@ -15,5 +15,27 @@
 }
 
 .day-row .day-cell.ganttBarCell {
+  position: relative;
+  background: transparent;
+}
+
+.day-row .day-cell.ganttBarCell::after {
+  content: "";
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 0;
+  right: 0;
   background: rgba(220, 38, 38, 0.28);
+  pointer-events: none;
+}
+
+.day-row .day-cell.ganttBarCell.ganttBarStart::after {
+  border-top-left-radius: 999px;
+  border-bottom-left-radius: 999px;
+}
+
+.day-row .day-cell.ganttBarCell.ganttBarEnd::after {
+  border-top-right-radius: 999px;
+  border-bottom-right-radius: 999px;
 }
