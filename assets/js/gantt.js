@@ -54,7 +54,7 @@
   }
 
   function repaintAll(root) {
-    paintAllRows(root);
+    markCalendarCells(root);
   }
 
   async function repaintUntilStable(root, { maxMs = 600 } = {}) {
@@ -496,7 +496,7 @@
       if (pendingFullRepaint) {
         pendingRowsToRepaint.clear();
         pendingFullRepaint = false;
-        paintAllRows(root);
+        markCalendarCells(root);
         return;
       }
 
