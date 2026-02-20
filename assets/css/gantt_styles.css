@@ -144,6 +144,12 @@
   background: rgb(0 0 0 / 0.3);
 }
 
+#right-header-track .day-cell.ganttBlockDayHoverCell {
+  background: #333333;
+  font-weight: 900;
+  font-size: 14px;
+}
+
 #left-body .left-row.ganttFocusDim > div {
   color: rgb(from currentColor r g b / 0.2);
 }
