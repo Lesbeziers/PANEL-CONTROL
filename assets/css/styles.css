@@ -147,11 +147,19 @@ body {
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-size: 45px;
   line-height: 1;
-  letter-spacing: 8px;
   font-weight: 300;
   user-select: none;
+}
+
+.panel-layout__month-nav-arrow {
+  display: inline-block;
+  min-width: 0.6em;
+  text-align: center;
 }
 
 .panel-layout__placeholder {
@@ -812,6 +820,6 @@ body {
 
   .panel-layout__month-nav {
     font-size: 46px;
-    letter-spacing: 7px;
+    gap: 9px;
   }
 }
