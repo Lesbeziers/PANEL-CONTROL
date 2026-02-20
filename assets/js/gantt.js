@@ -1018,8 +1018,21 @@
   }
 
   function attachHoverFocusListeners(root) {
+    const getEventTargetElement = (event) => {
+      if (event.target instanceof Element) {
+        return event.target;
+      }
+
+      if (event.target instanceof Node) {
+        return event.target.parentElement;
+      }
+
+      return null;
+    };
+
     root.addEventListener("mouseover", (event) => {
-      const blockHeaderDayCell = event.target instanceof Element ? event.target.closest("#right-body .day-row.group .day-cell") : null;
+      const targetElement = getEventTargetElement(event);
+      const blockHeaderDayCell = targetElement ? targetElement.closest("#right-body .day-row.group .day-cell") : null;
       if (!blockHeaderDayCell) {
         return;
       }
@@ -1060,7 +1073,8 @@
     }, true);
 
     root.addEventListener("mouseout", (event) => {
-      const fromBlockHeaderDayCell = event.target instanceof Element ? event.target.closest("#right-body .day-row.group .day-cell") : null;
+      const targetElement = getEventTargetElement(event);
+      const fromBlockHeaderDayCell = targetElement ? targetElement.closest("#right-body .day-row.group .day-cell") : null;
       if (!fromBlockHeaderDayCell) {
         return;
       }
