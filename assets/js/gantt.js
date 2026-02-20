@@ -27,6 +27,21 @@
   const HEADER_COLOR_GREEN = "#8fb596";
   const HEADER_COLOR_YELLOW = "#e8cd8e";
   const DEBUG_PASTE = true;
+    const MONTH_LABEL_TO_NUMBER = {
+    enero: 1,
+    febrero: 2,
+    marzo: 3,
+    abril: 4,
+    mayo: 5,
+    junio: 6,
+    julio: 7,
+    agosto: 8,
+    septiembre: 9,
+    setiembre: 9,
+    octubre: 10,
+    noviembre: 11,
+    diciembre: 12,
+  };
   
   let observer = null;
   let rafId = null;
@@ -252,31 +267,156 @@
     return day;
   }
 
-  function parseDateDay(value) {
+  function daysInMonth(month, year) {
+    return new Date(year, month, 0).getDate();
+  }
+
+  function normalizeMonthLabel(value) {
+    return `${value ?? ""}`
+      .trim()
+      .toLocaleLowerCase("es-ES")
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "");
+  }
+
+  function getCalendarContext(root) {
+    const now = new Date();
+    const fallback = {
+      month: now.getMonth() + 1,
+      year: now.getFullYear(),
+      daysInMonth: daysInMonth(now.getMonth() + 1, now.getFullYear()),
+    };
+    const titleText = root.querySelector(".panel-layout__month-title")?.textContent?.trim() || "";
+    const match = titleText.match(/^([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)\s+(\d{4})$/u);
+    if (!match) {
+      return fallback;
+    }
+
+    const month = MONTH_LABEL_TO_NUMBER[normalizeMonthLabel(match[1])];
+    const year = Number.parseInt(match[2], 10);
+    if (!Number.isInteger(month) || !Number.isInteger(year)) {
+      return fallback;
+    }
+
+    return {
+      month,
+      year,
+      daysInMonth: daysInMonth(month, year),
+    };
+  }
+
+  function parseDateValue(value, calendarContext) {
     const normalized = (value || "").trim();
     if (!normalized) {
       return null;
     }
 
-    let day = null;
+    let day;
+    let month;
+    let year;
+    let hasExplicitYear = false;
 
     if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) {
-      const parts = normalized.split("-");
-      day = Number.parseInt(parts[2], 10);
-    } else if (/^\d{1,2}(?:[\/.-]\d{1,2}){0,2}$/.test(normalized)) {
+      const [y, m, d] = normalized.split("-").map((part) => Number.parseInt(part, 10));
+      day = d;
+      month = m;
+      year = y;
+      hasExplicitYear = true;
+    } else if (/^\d{1,2}(?:[\/.-]\d{1,2}){1,2}$/.test(normalized)) {
       const parts = normalized.split(/[\/.-]/);
       day = Number.parseInt(parts[0], 10);
-    } else if (/^\d{6}$/.test(normalized) || /^\d{8}$/.test(normalized)) {
+      month = Number.parseInt(parts[1], 10);
+      if (parts[2]) {
+        year = Number.parseInt(parts[2], 10);
+        hasExplicitYear = true;
+        if (parts[2].length === 2) {
+          year += 2000;
+        }
+      } else {
+        year = calendarContext.year;
+      }
+    } else if (/^\d{6}$/.test(normalized)) {
       day = Number.parseInt(normalized.slice(0, 2), 10);
-    }
-
-    if (!Number.isInteger(day) || day < 1 || day > 31) {
+      month = Number.parseInt(normalized.slice(2, 4), 10);
+      year = Number.parseInt(normalized.slice(4, 6), 10) + 2000;
+      hasExplicitYear = true;
+    } else if (/^\d{8}$/.test(normalized)) {
+      day = Number.parseInt(normalized.slice(0, 2), 10);
+      month = Number.parseInt(normalized.slice(2, 4), 10);
+      year = Number.parseInt(normalized.slice(4, 8), 10);
+      hasExplicitYear = true;
+    } else {
       return null;
     }
 
-    return day;
+    if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
+      return null;
+    }
+
+    if (month < 1 || month > 12 || day < 1 || day > daysInMonth(month, year)) {
+      return null;
+    }
+
+    return {
+      date: new Date(year, month - 1, day),
+      month,
+      hasExplicitYear,
+    };
   }
   
+  function getDateRangeForRow(leftRow, calendarContext) {
+    if (!leftRow) {
+      return null;
+    }
+
+    const startText = leftRow.querySelector('[data-column-key="startDate"]')?.textContent?.trim() || "";
+    const endText = leftRow.querySelector('[data-column-key="endDate"]')?.textContent?.trim() || "";
+    const start = parseDateValue(startText, calendarContext);
+    const end = parseDateValue(endText, calendarContext);
+    if (!start || !end) {
+      return null;
+    }
+
+    const startDate = start.date;
+    let endDate = end.date;
+
+    if (endDate < startDate && !end.hasExplicitYear && end.month < start.month) {
+      endDate = new Date(endDate.getFullYear() + 1, endDate.getMonth(), endDate.getDate());
+    }
+
+    if (startDate > endDate) {
+      return null;
+    }
+
+    return { startDate, endDate };
+  }
+
+  function getVisibleMonthRange(calendarContext) {
+    return {
+      startDate: new Date(calendarContext.year, calendarContext.month - 1, 1),
+      endDate: new Date(calendarContext.year, calendarContext.month - 1, calendarContext.daysInMonth),
+    };
+  }
+
+  function getVisibleDayIntervalForRow(leftRow, calendarContext) {
+    const rowRange = getDateRangeForRow(leftRow, calendarContext);
+    if (!rowRange) {
+      return null;
+    }
+
+    const monthRange = getVisibleMonthRange(calendarContext);
+    const visibleStart = rowRange.startDate > monthRange.startDate ? rowRange.startDate : monthRange.startDate;
+    const visibleEnd = rowRange.endDate < monthRange.endDate ? rowRange.endDate : monthRange.endDate;
+    if (visibleStart > visibleEnd) {
+      return null;
+    }
+
+    return {
+      startDay: visibleStart.getDate(),
+      endDay: visibleEnd.getDate(),
+    };
+  }
+
   function detectCalendarColumns(headerTrack) {
     const headerCells = [...headerTrack.children];
     return headerCells.reduce((acc, headerCell, columnIndex) => {
@@ -462,7 +602,7 @@
     return null;
   }
 
-  function paintRangeForRow(dayRow, leftRow) {
+  function paintRangeForRow(dayRow, leftRow, calendarContext) {
     clearRangeCells(dayRow);
 
     const bandColor = getBlockBandColor(dayRow);
@@ -484,16 +624,15 @@
       return;
     }
 
-    const startDay = parseDateDay(startCell.textContent);
-    const endDay = parseDateDay(endCell.textContent);
-    if (startDay === null || endDay === null || startDay > endDay) {
+    const visibleInterval = getVisibleDayIntervalForRow(leftRow, calendarContext);
+    if (!visibleInterval) {
       return;
     }
 
     const rangeCells = [];
     dayRow.querySelectorAll(`.day-cell[${DAY_ATTR}]`).forEach((cell) => {
       const day = Number.parseInt(cell.getAttribute(DAY_ATTR), 10);
-      if (Number.isInteger(day) && day >= startDay && day <= endDay) {
+      if (Number.isInteger(day) && day >= visibleInterval.startDay && day <= visibleInterval.endDay) {
         cell.classList.add(RANGE_CELL_CLASS);
         rangeCells.push(cell);
       }
@@ -543,7 +682,7 @@
     return null;
   }
 
-  function renderBlockDailyCounts(dayRows, leftRows) {
+  function renderBlockDailyCounts(dayRows, leftRows, calendarContext) {
     const blockEntries = [];
     let activeBlock = null;
 
@@ -570,20 +709,13 @@
         return;
       }
 
-      const startCell = leftRow.querySelector('[data-column-key="startDate"]');
-      const endCell = leftRow.querySelector('[data-column-key="endDate"]');
-      if (!startCell || !endCell) {
+      const visibleInterval = getVisibleDayIntervalForRow(leftRow, calendarContext);
+      if (!visibleInterval) {
         return;
       }
 
-      const startDay = parseDateDay(startCell.textContent);
-      const endDay = parseDateDay(endCell.textContent);
-      if (startDay === null || endDay === null || startDay > endDay) {
-        return;
-      }
-
-      const fromDay = Math.max(1, startDay);
-      const toDay = Math.min(31, endDay);
+      const fromDay = Math.max(1, visibleInterval.startDay);
+      const toDay = Math.min(calendarContext.daysInMonth, visibleInterval.endDay);
       for (let day = fromDay; day <= toDay; day += 1) {
         activeBlock.counts[day] += 1;
       }
@@ -608,6 +740,7 @@
       return;
     }
 
+    const calendarContext = getCalendarContext(root);
     const calendarColumns = detectCalendarColumns(headerTrack);
     if (!calendarColumns.length) {
       return;
@@ -638,10 +771,10 @@
         return;
       }
 
-      paintRangeForRow(row, leftRows[rowIndex]);
+      paintRangeForRow(row, leftRows[rowIndex], calendarContext);
     });
 
-    renderBlockDailyCounts(dayRows, leftRows);
+    renderBlockDailyCounts(dayRows, leftRows, calendarContext);
   }
 
   function paintSingleRowByLeftRow(root, leftRow) {
@@ -661,14 +794,14 @@
       return;
     }
 
-    paintRangeForRow(dayRow, leftRow);
+    paintRangeForRow(dayRow, leftRow, getCalendarContext(root));
   }
 
   function paintAllRows(root) {
     const dayRows = [...root.querySelectorAll("#right-body .day-row")];
     const leftRows = [...root.querySelectorAll("#left-body .left-row")];
     dayRows.forEach((dayRow, rowIndex) => {
-      paintRangeForRow(dayRow, leftRows[rowIndex]);
+      paintRangeForRow(dayRow, leftRows[rowIndex], getCalendarContext(root));
     });
   }
 
@@ -724,24 +857,15 @@
     return leftRows[rowIndex] || null;
   }
 
-  function parseDateFromCellValue(value) {
+  function parseDateFromCellValue(value, calendarContext) {
     const normalized = (value || "").trim();
     if (!normalized) {
       return null;
     }
 
-    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) {
-      const [year, month, day] = normalized.split("-").map((part) => Number.parseInt(part, 10));
-      return new Date(year, month - 1, day);
-    }
-
-    const slashMatch = normalized.match(/^(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?$/);
-    if (slashMatch) {
-      const day = Number.parseInt(slashMatch[1], 10);
-      const month = Number.parseInt(slashMatch[2], 10);
-      const yearPart = slashMatch[3];
-      const year = yearPart ? Number.parseInt(yearPart.length === 2 ? `20${yearPart}` : yearPart, 10) : new Date().getFullYear();
-      return new Date(year, month - 1, day);
+    const parsed = parseDateValue(value, calendarContext);
+    if (parsed) {
+      return parsed.date;
     }
 
     const monthMap = {
@@ -755,7 +879,7 @@
       const day = Number.parseInt(textMatch[1], 10);
       const month = monthMap[textMatch[2]];
       const yearPart = textMatch[3];
-      const year = yearPart ? Number.parseInt(yearPart.length === 2 ? `20${yearPart}` : yearPart, 10) : new Date().getFullYear();
+      const year = yearPart ? Number.parseInt(yearPart.length === 2 ? `20${yearPart}` : yearPart, 10) : calendarContext.year;
       if (Number.isInteger(month)) {
         return new Date(year, month, day);
       }
@@ -780,8 +904,9 @@
       return null;
     }
 
-    const startDate = parseDateFromCellValue(startText);
-    const endDate = parseDateFromCellValue(endText);
+    const calendarContext = getCalendarContext(document);
+    const startDate = parseDateFromCellValue(startText, calendarContext);
+    const endDate = parseDateFromCellValue(endText, calendarContext);
     if (startDate && endDate && !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
       const oneDay = 24 * 60 * 60 * 1000;
       const durationDays = Math.floor((endDate - startDate) / oneDay) + 1;
@@ -838,13 +963,13 @@
 
     const startText = leftRow.querySelector('[data-column-key="startDate"]')?.textContent || "";
     const endText = leftRow.querySelector('[data-column-key="endDate"]')?.textContent || "";
-    const startDay = parseDateDay(startText);
-    const endDay = parseDateDay(endText);
-    if (startDay === null || endDay === null || startDay > endDay) {
+    const calendarContext = getCalendarContext(root);
+    const visibleInterval = getVisibleDayIntervalForRow(leftRow, calendarContext);
+    if (!visibleInterval) {
       return false;
     }
 
-    return day >= startDay && day <= endDay;
+    return day >= visibleInterval.startDay && day <= visibleInterval.endDay;
   }
 
   function clearGlobalHeaderDayFocus(root) {
