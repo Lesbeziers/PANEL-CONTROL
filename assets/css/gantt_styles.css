@@ -61,6 +61,28 @@
   border-bottom-right-radius: 0;
 }
 
+#right-body .day-row .day-cell.ganttBarCell .ganttBarRangeMarker {
+  position: absolute;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+#right-body .day-row .day-cell.ganttBarCell .ganttBarRangeMarkerStart {
+  left: 5px;
+  border-right: 8px solid #ffffff;
+}
+
+#right-body .day-row .day-cell.ganttBarCell .ganttBarRangeMarkerEnd {
+  right: 5px;
+  border-left: 8px solid #ffffff;
+}
+
 #right-body .day-row.group .day-cell {
   position: relative;
 }
