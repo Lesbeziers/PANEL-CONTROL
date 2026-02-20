@@ -14,10 +14,25 @@ const columns = [
 ];
 
 const headers = columns.map((column) => column.label);
+const MONTH_NAMES_ES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+const now = new Date();
 const DEFAULT_CALENDAR_CONTEXT = {
-  month: 2,
-  year: 2026,
-  daysInMonth: 28,
+  month: now.getMonth() + 1,
+  year: now.getFullYear(),
+  daysInMonth: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
 };
 const MONTH_LABEL_TO_NUMBER = {
   enero: 1,
@@ -2618,6 +2633,10 @@ function attachIdTextCell(cell, row) {
 }
 
 function renderMonthBlockGrid(root) {
+  const defaultMonthName = MONTH_NAMES_ES[DEFAULT_CALENDAR_CONTEXT.month - 1] || "";
+  const monthTitle = `${defaultMonthName.toUpperCase()} ${DEFAULT_CALENDAR_CONTEXT.year}`;
+  const monthAriaLabel = `MonthBlockGrid ${defaultMonthName.charAt(0).toUpperCase()}${defaultMonthName.slice(1)} ${DEFAULT_CALENDAR_CONTEXT.year}`;
+
   root.innerHTML = `
     <section class="panel-layout" aria-label="Panel de control M+">
       <header class="panel-layout__top-header">
@@ -2626,7 +2645,7 @@ function renderMonthBlockGrid(root) {
 
       <div class="panel-layout__month-strip" aria-label="Selector de mes">
         <div class="panel-layout__month-strip-inner">
-          <div class="panel-layout__month-title">FEBRERO 2026</div>
+          <div class="panel-layout__month-title">${monthTitle}</div>
           <div class="panel-layout__month-nav" aria-hidden="true">
             <span class="panel-layout__month-nav-arrow">‹</span>
             <span class="panel-layout__month-nav-arrow">›</span>
@@ -2636,7 +2655,7 @@ function renderMonthBlockGrid(root) {
 
       <div class="panel-layout__placeholder" aria-hidden="true"></div>
 
-      <section class="month-block" aria-label="MonthBlockGrid Febrero 2026">
+      <section class="month-block" aria-label="${monthAriaLabel}">
         <header class="month-block__header">
           <div class="left-header" id="left-header"></div>
           <div class="right-header-scroll" id="right-header-scroll">
