@@ -2,6 +2,8 @@
   const RANGE_CELL_CLASS = "ganttBarCell";
   const RANGE_START_CLASS = "ganttBarStart";
   const RANGE_END_CLASS = "ganttBarEnd";
+  const RANGE_START_FLAT_CLASS = "ganttBarStartFlat";
+  const RANGE_END_FLAT_CLASS = "ganttBarEndFlat";
   const DAY_ATTR = "data-day";
   const OBSERVER_TARGET_SELECTOR = ".month-block #right-body";
   const DATE_COLUMN_SELECTOR = '.left-row > div[data-column-key="startDate"], .left-row > div[data-column-key="endDate"]';
@@ -414,6 +416,8 @@
     return {
       startDay: visibleStart.getDate(),
       endDay: visibleEnd.getDate(),
+      startsBeforeMonth: rowRange.startDate < monthRange.startDate,
+      endsAfterMonth: rowRange.endDate > monthRange.endDate,
     };
   }
 
@@ -437,6 +441,8 @@
       cell.classList.remove(RANGE_CELL_CLASS);
       cell.classList.remove(RANGE_START_CLASS);
       cell.classList.remove(RANGE_END_CLASS);
+      cell.classList.remove(RANGE_START_FLAT_CLASS);
+      cell.classList.remove(RANGE_END_FLAT_CLASS);
     });
   }
 
@@ -644,6 +650,14 @@
 
     rangeCells[0].classList.add(RANGE_START_CLASS);
     rangeCells[rangeCells.length - 1].classList.add(RANGE_END_CLASS);
+
+    if (visibleInterval.startsBeforeMonth) {
+      rangeCells[0].classList.add(RANGE_START_FLAT_CLASS);
+    }
+
+    if (visibleInterval.endsAfterMonth) {
+      rangeCells[rangeCells.length - 1].classList.add(RANGE_END_FLAT_CLASS);
+    }
   }
 
   function updateHeaderDayCountCell(cell, count) {
@@ -751,6 +765,8 @@
       cell.classList.remove(RANGE_CELL_CLASS);
       cell.classList.remove(RANGE_START_CLASS);
       cell.classList.remove(RANGE_END_CLASS);
+      cell.classList.remove(RANGE_START_FLAT_CLASS);
+      cell.classList.remove(RANGE_END_FLAT_CLASS);
       cell.removeAttribute(DAY_ATTR);
     });
 
