@@ -2565,8 +2565,10 @@ function renderMonthBlockGrid(root) {
       </header>
 
       <div class="panel-layout__month-strip" aria-label="Selector de mes">
-        <div class="panel-layout__month-title">FEBRERO 2026</div>
-        <div class="panel-layout__month-nav" aria-hidden="true">‹ ›</div>
+        <div class="panel-layout__month-strip-inner">
+          <div class="panel-layout__month-title">FEBRERO 2026</div>
+          <div class="panel-layout__month-nav" aria-hidden="true">‹ ›</div>
+        </div>
       </div>
 
       <div class="panel-layout__placeholder" aria-hidden="true"></div>
