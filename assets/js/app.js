@@ -2559,21 +2559,34 @@ function attachIdTextCell(cell, row) {
 
 function renderMonthBlockGrid(root) {
   root.innerHTML = `
-    <section class="month-block" aria-label="MonthBlockGrid Febrero 2026">
-      <header class="month-block__header">
-        <div class="left-header" id="left-header"></div>
-        <div class="right-header-scroll" id="right-header-scroll">
-          <div class="right-header-track" id="right-header-track"></div>
-        </div>
+    <section class="panel-layout" aria-label="Panel de control M+">
+      <header class="panel-layout__top-header">
+        <img src="assets/img/cabecera_panel.svg" alt="Panel de control M+" />
       </header>
-      <div class="month-block__body">
-        <div class="month-block__body-grid" tabindex="0" aria-label="Grid de planificación">
-          <div class="left-grid" id="left-body"></div>
-          <div class="right-body-scroll" id="right-body-scroll">
-            <div id="right-body"></div>
+
+      <div class="panel-layout__month-strip" aria-label="Selector de mes">
+        <div class="panel-layout__month-title">FEBRERO 2026</div>
+        <div class="panel-layout__month-nav" aria-hidden="true">‹ ›</div>
+      </div>
+
+      <div class="panel-layout__placeholder" aria-hidden="true"></div>
+
+      <section class="month-block" aria-label="MonthBlockGrid Febrero 2026">
+        <header class="month-block__header">
+          <div class="left-header" id="left-header"></div>
+          <div class="right-header-scroll" id="right-header-scroll">
+            <div class="right-header-track" id="right-header-track"></div>
+          </div>
+        </header>
+        <div class="month-block__body">
+          <div class="month-block__body-grid" tabindex="0" aria-label="Grid de planificación">
+            <div class="left-grid" id="left-body"></div>
+            <div class="right-body-scroll" id="right-body-scroll">
+              <div id="right-body"></div>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
     </section>
   `;
 
