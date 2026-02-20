@@ -45,10 +45,20 @@
   border-bottom-left-radius: 999px;
 }
 
+.day-row .day-cell.ganttBarCell.ganttBarStart.ganttBarStartFlat::after {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
 .day-row .day-cell.ganttBarCell.ganttBarEnd::after {
   right: 0;
   border-top-right-radius: 999px;
   border-bottom-right-radius: 999px;
+}
+
+.day-row .day-cell.ganttBarCell.ganttBarEnd.ganttBarEndFlat::after {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 #right-body .day-row.group .day-cell {
