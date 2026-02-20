@@ -164,7 +164,7 @@ body {
 
 .panel-layout__placeholder {
   flex: 0 0 auto;
-  min-height: 88px;
+  min-height: 44px;
   background: #ffffff;
 }
 
