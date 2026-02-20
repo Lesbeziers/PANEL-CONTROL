@@ -4,6 +4,9 @@
   const RANGE_END_CLASS = "ganttBarEnd";
   const RANGE_START_FLAT_CLASS = "ganttBarStartFlat";
   const RANGE_END_FLAT_CLASS = "ganttBarEndFlat";
+  const RANGE_MARKER_CLASS = "ganttBarRangeMarker";
+  const RANGE_MARKER_START_CLASS = "ganttBarRangeMarkerStart";
+  const RANGE_MARKER_END_CLASS = "ganttBarRangeMarkerEnd";
   const DAY_ATTR = "data-day";
   const OBSERVER_TARGET_SELECTOR = ".month-block #right-body";
   const DATE_COLUMN_SELECTOR = '.left-row > div[data-column-key="startDate"], .left-row > div[data-column-key="endDate"]';
@@ -443,7 +446,23 @@
       cell.classList.remove(RANGE_END_CLASS);
       cell.classList.remove(RANGE_START_FLAT_CLASS);
       cell.classList.remove(RANGE_END_FLAT_CLASS);
+      cell.querySelectorAll(`.${RANGE_MARKER_CLASS}`).forEach((marker) => marker.remove());
     });
+  }
+
+  function appendRangeMarker(cell, markerClass) {
+    if (!cell || !markerClass) {
+      return;
+    }
+
+    if (cell.querySelector(`.${markerClass}`)) {
+      return;
+    }
+
+    const marker = document.createElement("span");
+    marker.className = `${RANGE_MARKER_CLASS} ${markerClass}`;
+    marker.setAttribute("aria-hidden", "true");
+    cell.appendChild(marker);
   }
 
   function normalizeColor(value) {
@@ -653,10 +672,12 @@
 
     if (visibleInterval.startsBeforeMonth) {
       rangeCells[0].classList.add(RANGE_START_FLAT_CLASS);
+      appendRangeMarker(rangeCells[0], RANGE_MARKER_START_CLASS);
     }
 
     if (visibleInterval.endsAfterMonth) {
       rangeCells[rangeCells.length - 1].classList.add(RANGE_END_FLAT_CLASS);
+      appendRangeMarker(rangeCells[rangeCells.length - 1], RANGE_MARKER_END_CLASS);
     }
   }
 
