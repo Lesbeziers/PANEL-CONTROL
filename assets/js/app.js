@@ -14,8 +14,26 @@ const columns = [
 ];
 
 const headers = columns.map((column) => column.label);
-const DATE_DEFAULT_MONTH = 2; // TODO: read active month dynamically.
-const DATE_DEFAULT_YEAR = 2026; // TODO: read active year dynamically.
+const DEFAULT_CALENDAR_CONTEXT = {
+  month: 2,
+  year: 2026,
+  daysInMonth: 28,
+};
+const MONTH_LABEL_TO_NUMBER = {
+  enero: 1,
+  febrero: 2,
+  marzo: 3,
+  abril: 4,
+  mayo: 5,
+  junio: 6,
+  julio: 7,
+  agosto: 8,
+  septiembre: 9,
+  setiembre: 9,
+  octubre: 10,
+  noviembre: 11,
+  diciembre: 12,
+};
 const DATE_COLUMNS = new Set(["startDate", "endDate"]);
 
 let rowId = 0;
@@ -80,6 +98,43 @@ let toastElement = null;
 let toastHideTimer = null;
 let deleteConfirmElement = null;
 let deleteConfirmState = null;
+let currentCalendarContext = { ...DEFAULT_CALENDAR_CONTEXT };
+
+function normalizeMonthLabel(value) {
+  return `${value ?? ""}`
+    .trim()
+    .toLocaleLowerCase("es-ES")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+}
+
+function resolveCalendarContextFromTitle(titleText) {
+  const normalizedTitle = `${titleText ?? ""}`.trim();
+  const match = normalizedTitle.match(/^([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)\s+(\d{4})$/u);
+  if (!match) {
+    return { ...DEFAULT_CALENDAR_CONTEXT };
+  }
+
+  const monthLabel = normalizeMonthLabel(match[1]);
+  const year = Number.parseInt(match[2], 10);
+  const month = MONTH_LABEL_TO_NUMBER[monthLabel];
+
+  if (!Number.isInteger(month) || !Number.isInteger(year)) {
+    return { ...DEFAULT_CALENDAR_CONTEXT };
+  }
+
+  return {
+    month,
+    year,
+    daysInMonth: daysInMonth(month, year),
+  };
+}
+
+function updateCalendarContext(root = document) {
+  const titleElement = root.querySelector?.(".panel-layout__month-title");
+  currentCalendarContext = resolveCalendarContextFromTitle(titleElement?.textContent);
+  return currentCalendarContext;
+}
 
 function getDeleteTarget(preferredBlockIndex = null) {
   if (
@@ -491,7 +546,11 @@ function formatDateISO(day, month, year) {
   return `${year}-${mm}-${dd}`;
 }
 
-function parseDateInput(text, defaultMonth = DATE_DEFAULT_MONTH, defaultYear = DATE_DEFAULT_YEAR) {
+function parseDateInput(
+  text,
+  defaultMonth = currentCalendarContext.month,
+  defaultYear = currentCalendarContext.year,
+) {
   const originalText = `${text ?? ""}`;
   const trimmed = originalText.trim();
   if (!trimmed) {
@@ -2241,10 +2300,11 @@ function createLeftRow({ group = false, cells = [], onAddRow, onDeleteRows, canD
 function createDayRow(group = false) {
   const dayRow = document.createElement("div");
   dayRow.className = `day-row ${group ? "group" : ""}`;
-
+  const totalActiveDays = currentCalendarContext.daysInMonth;
+  
   for (let day = 1; day <= 31; day++) {
     const dayCell = document.createElement("div");
-    dayCell.className = `day-cell ${day > 28 ? "inactive" : ""}`;
+    dayCell.className = `day-cell ${day > totalActiveDays ? "inactive" : ""}`;
     dayRow.appendChild(dayCell);
   }
 
@@ -2602,10 +2662,11 @@ function renderMonthBlockGrid(root) {
     leftHeader.appendChild(cell);
   });
 
+  const calendarContext = updateCalendarContext(root);
   const dayHeader = root.querySelector("#right-header-track");
   for (let day = 1; day <= 31; day++) {
     const cell = document.createElement("div");
-    cell.className = `day-cell ${day > 28 ? "inactive" : ""}`;
+    cell.className = `day-cell ${day > calendarContext.daysInMonth ? "inactive" : ""}`;
     cell.textContent = day;
     dayHeader.appendChild(cell);
   }
@@ -2634,6 +2695,7 @@ function renderMonthBlockGrid(root) {
 }
 
 function renderRows() {
+  updateCalendarContext(document);
   const leftBody = document.getElementById("left-body");
   const rightBody = document.getElementById("right-body");
 
