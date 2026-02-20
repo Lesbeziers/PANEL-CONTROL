@@ -119,8 +119,8 @@ body {
 .panel-layout__month-strip {
   flex: 0 0 auto;
   position: relative;
-  min-height: 12px;
-  padding: 2px 24px;
+  min-height: 35.2px;
+  padding: 6.4px 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -129,7 +129,7 @@ body {
 }
 
 .panel-layout__month-title {
-  font-size: 22px;
+  font-size: 34px;
   font-weight: 900;
   line-height: 1;
   letter-spacing: 0.5px;
@@ -141,9 +141,9 @@ body {
   right: max(24px, calc(50% - (var(--month-grid-width) / 2)));
   top: 50%;
   transform: translateY(-50%);
-  font-size: 28px;
+  font-size: 45px;
   line-height: 1;
-  letter-spacing: 5px;
+  letter-spacing: 15px;
   font-weight: 300;
   user-select: none;
 }
