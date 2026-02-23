@@ -33,7 +33,7 @@
   const HEADER_COLOR_GREEN = "#8fb596";
   const HEADER_COLOR_YELLOW = "#e8cd8e";
   const DEBUG_PASTE = true;
-    const MONTH_LABEL_TO_NUMBER = {
+  const MONTH_LABEL_TO_NUMBER = {
     enero: 1,
     febrero: 2,
     marzo: 3,
@@ -1214,15 +1214,19 @@
     };
 
     root.addEventListener("mouseover", (event) => {
-      const targetElement = getEventTargetElement(event);
-      const blockHeaderDayCell = targetElement ? targetElement.closest("#right-body .day-row.group .day-cell") : null;
+      const hoverCount = event.target instanceof Element ? event.target.closest(`#right-body .day-row.group .day-cell .${BLOCK_DAY_COUNT_CLASS}`) : null;
+      if (!hoverCount) {
+        return;
+      }
+
+      const blockHeaderDayCell = hoverCount.closest(".day-cell");
       if (!blockHeaderDayCell) {
         return;
       }
 
       const day = parseDayLabel(blockHeaderDayCell.getAttribute(DAY_ATTR) || blockHeaderDayCell.textContent);
       const headerRow = blockHeaderDayCell.closest(".day-row.group");
-      const countText = blockHeaderDayCell.querySelector(`.${BLOCK_DAY_COUNT_CLASS}`)?.textContent?.trim() || "";
+      const countText = hoverCount.textContent?.trim() || "";
       if (day === null || !headerRow || !countText) {
         return;
       }
@@ -1256,14 +1260,13 @@
     }, true);
 
     root.addEventListener("mouseout", (event) => {
-      const targetElement = getEventTargetElement(event);
-      const fromBlockHeaderDayCell = targetElement ? targetElement.closest("#right-body .day-row.group .day-cell") : null;
-      if (!fromBlockHeaderDayCell) {
+      const fromHoverCount = event.target instanceof Element ? event.target.closest(`#right-body .day-row.group .day-cell .${BLOCK_DAY_COUNT_CLASS}`) : null;
+      if (!fromHoverCount) {
         return;
       }
 
       const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
-      if (related?.closest?.("#right-body .day-row.group .day-cell")) {
+      if (related?.closest?.(`#right-body .day-row.group .day-cell .${BLOCK_DAY_COUNT_CLASS}`) === fromHoverCount) {
         return;
       }
 
