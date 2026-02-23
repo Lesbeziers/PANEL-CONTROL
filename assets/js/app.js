@@ -758,7 +758,21 @@ function getOrderedRowsForMonth(block, calendarContext) {
     });
 
   const remainingRows = visibleRows.filter((item) => !item.isInheritedInMonth);
-  return [...inheritedRows, ...remainingRows];
+  const orderedVisibleRows = [...inheritedRows, ...remainingRows];
+  if (orderedVisibleRows.length) {
+    return orderedVisibleRows;
+  }
+
+  const fallbackRow = newRowForBlock(block.blockType, calendarContext);
+  block.rows.push(fallbackRow);
+
+  return [{
+    row: fallbackRow,
+    sourceIndex: block.rows.length - 1,
+    rowRange: null,
+    isVisibleInCurrentMonth: true,
+    isInheritedInMonth: false,
+  }];
 }
 
 function parseDateInput(
