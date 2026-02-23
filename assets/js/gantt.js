@@ -1267,9 +1267,10 @@
     };
 
     root.addEventListener("mouseover", (event) => {
-      const blockHeaderDayCell = event.target instanceof Element
-        ? event.target.closest(`#right-body .day-row.group .day-cell`)
+      const blockDayCountNode = event.target instanceof Element
+        ? event.target.closest(`.${BLOCK_DAY_COUNT_CLASS}`)
         : null;
+      const blockHeaderDayCell = blockDayCountNode?.closest(`#right-body .day-row.group .day-cell`) || null;
       if (!blockHeaderDayCell) {
         return;
       }
@@ -1311,15 +1312,15 @@
     }, true);
 
     root.addEventListener("mouseout", (event) => {
-      const fromCell = event.target instanceof Element
-        ? event.target.closest(`#right-body .day-row.group .day-cell`)
+      const fromCountNode = event.target instanceof Element
+        ? event.target.closest(`.${BLOCK_DAY_COUNT_CLASS}`)
         : null;
-      if (!fromCell) {
+      if (!fromCountNode) {
         return;
       }
 
       const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
-      if (related && fromCell.contains(related)) {
+      if (related && fromCountNode.contains(related)) {
         return;
       }
 
