@@ -15,12 +15,11 @@
 }
 
 #right-body .day-row.group .day-cell.ganttWeekendCell {
-  background-image: linear-gradient(rgb(255 0 0 / 0.05), rgb(255 0 0 / 0.05));
-  background-color: var(--group-bg);
+  background: var(--group-bg);
 }
 
 #right-header-track .day-cell.ganttWeekendCell:not(.inactive) {
-  background: rgb(255 0 0 / 0.05);
+  background: var(--header-bg);
 }
 
 #right-body .day-row:not(.group) .day-cell::before {
