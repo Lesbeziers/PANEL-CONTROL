@@ -288,6 +288,75 @@ function canDeleteRows(preferredBlockIndex = null) {
   return !!getDeleteTarget(preferredBlockIndex);
 }
 
+function getDuplicateTarget(preferredBlockIndex = null) {
+  return getDeleteTarget(preferredBlockIndex);
+}
+
+function copyRowDataInto(sourceRow, targetRow) {
+  if (!sourceRow || !targetRow) {
+    return targetRow;
+  }
+
+  const { rowKey, ...sourceData } = sourceRow;
+  return {
+    ...targetRow,
+    ...sourceData,
+    rowKey: targetRow.rowKey,
+  };
+}
+
+function duplicateRowsAroundSelection(direction, preferredBlockIndex = null) {
+  const duplicateTarget = getDuplicateTarget(preferredBlockIndex);
+  if (!duplicateTarget || (direction !== "above" && direction !== "below")) {
+    return;
+  }
+
+  const { blockIndex, startRow, endRow, count } = duplicateTarget;
+  const block = blocks[blockIndex];
+  if (!block?.rows?.length) {
+    return;
+  }
+
+  const nextRows = [...block.rows];
+  let sourceStart = startRow;
+  let sourceEnd = endRow;
+
+  if (direction === "above") {
+    const missingAbove = Math.max(0, count - sourceStart);
+    if (missingAbove > 0) {
+      const rowsToInsert = Array.from({ length: missingAbove }, () => newRowForBlock(block.blockType, currentCalendarContext));
+      nextRows.splice(0, 0, ...rowsToInsert);
+      sourceStart += missingAbove;
+      sourceEnd += missingAbove;
+    }
+
+    const sourceRows = nextRows.slice(sourceStart, sourceEnd + 1).map((row) => ({ ...row }));
+    const targetStart = sourceStart - count;
+    sourceRows.forEach((sourceRow, offset) => {
+      const targetIndex = targetStart + offset;
+      nextRows[targetIndex] = copyRowDataInto(sourceRow, nextRows[targetIndex]);
+    });
+  }
+
+  if (direction === "below") {
+    const missingBelow = Math.max(0, sourceEnd + count - (nextRows.length - 1));
+    if (missingBelow > 0) {
+      const rowsToInsert = Array.from({ length: missingBelow }, () => newRowForBlock(block.blockType, currentCalendarContext));
+      nextRows.splice(nextRows.length, 0, ...rowsToInsert);
+    }
+
+    const sourceRows = nextRows.slice(sourceStart, sourceEnd + 1).map((row) => ({ ...row }));
+    const targetStart = sourceEnd + 1;
+    sourceRows.forEach((sourceRow, offset) => {
+      const targetIndex = targetStart + offset;
+      nextRows[targetIndex] = copyRowDataInto(sourceRow, nextRows[targetIndex]);
+    });
+  }
+
+  blocks[blockIndex] = { ...block, rows: nextRows };
+  renderRows();
+}
+
 function refreshDeleteControls() {
   document.querySelectorAll('.gutter-icon-btn[data-action="delete-rows"]').forEach((button) => {
     const blockIndex = Number.parseInt(button.dataset.blockIndex, 10);
@@ -2443,6 +2512,9 @@ function ensureContextMenuElement() {
     <button type="button" class="context-menu__item" data-action="above" role="menuitem">Insertar fila encima</button>
     <button type="button" class="context-menu__item" data-action="below" role="menuitem">Insertar fila debajo</button>
     <div class="context-menu__divider" role="separator"></div>
+    <button type="button" class="context-menu__item" data-action="duplicate-above" role="menuitem">Duplicar filas encima</button>
+    <button type="button" class="context-menu__item" data-action="duplicate-below" role="menuitem">Duplicar filas debajo</button>
+    <div class="context-menu__divider" role="separator"></div>
     <button type="button" class="context-menu__item" data-action="delete" role="menuitem">Eliminar filas</button>
   `;
 
@@ -2468,6 +2540,18 @@ function ensureContextMenuElement() {
 
     if (target.dataset.action === "below") {
       insertRow(blockIndex, rowIndex + 1);
+      closeContextMenu();
+      return;
+    }
+    
+    if (target.dataset.action === "duplicate-above") {
+      duplicateRowsAroundSelection("above", blockIndex);
+      closeContextMenu();
+      return;
+    }
+
+    if (target.dataset.action === "duplicate-below") {
+      duplicateRowsAroundSelection("below", blockIndex);
       closeContextMenu();
       return;
     }
