@@ -657,10 +657,14 @@ body {
   transition: background-color 120ms ease;
 }
 
-.right-header-track .day-cell:hover {
+.right-header-track .day-cell:not(.inactive):hover {
   background: #333333;
   font-weight: 900;
   font-size: 14px;
+}
+
+.right-header-track .day-cell.inactive {
+  pointer-events: none;
 }
 
 .right-header-track .day-cell.inactive {
