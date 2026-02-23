@@ -6,7 +6,7 @@
 }
 
 #right-body .day-row .day-cell.ganttWeekendCell {
-  background: rgb(255 0 0 / 0.08);
+  background: rgb(255 0 0 / 0.05);
 }
 
 #right-body .day-row.group .day-cell.ganttWeekendCell {
