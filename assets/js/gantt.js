@@ -1561,6 +1561,15 @@
     startCalendarMarkObserver(monthBlock);
     attachDateEditRepaintListeners(monthBlock);
     attachHoverFocusListeners(monthBlock);
+
+    document.addEventListener("calendar:month-change", (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target || (!target.contains(monthBlock) && !monthBlock.contains(target))) {
+        return;
+      }
+
+      markCalendarCells(monthBlock);
+    });
   }
 
   if (document.readyState === "loading") {
