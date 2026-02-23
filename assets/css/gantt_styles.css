@@ -9,6 +9,14 @@
   background: rgb(255 0 0 / 0.08);
 }
 
+#right-body .day-row.group .day-cell.ganttWeekendCell {
+  background: var(--group-bg);
+}
+
+#right-body .day-row .day-cell.ganttBarCell.ganttWeekendCell {
+  background: transparent;
+}
+
 #right-body .day-row:not(.group) .day-cell::before {
   content: "";
   position: absolute;
@@ -129,7 +137,7 @@
   opacity: 1;
 }
 
-#right-body .day-row.ganttGlobalDayDim .day-cell:not(.ganttBarCell)::after {
+#right-body .day-row.ganttGlobalDayDim .day-cell:not(.ganttBarCell):not(.ganttWeekendCell)::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -142,7 +150,7 @@
   opacity: 0.2;
 }
 
-#right-body .day-row.ganttBlockDayDim .day-cell:not(.ganttBarCell)::after {
+#right-body .day-row.ganttBlockDayDim .day-cell:not(.ganttBarCell):not(.ganttWeekendCell)::after {
   content: "";
   position: absolute;
   inset: 0;
