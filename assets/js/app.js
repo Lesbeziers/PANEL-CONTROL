@@ -64,8 +64,11 @@ function newRow() {
     genre: "",
     startDateText: "",
     startDateISO: null,
+    startDateError: null,
     endDateText: "",
     endDateISO: null,
+    endDateError: null,
+    dateRangeError: null,
     homeMonth: DEFAULT_CALENDAR_CONTEXT.month,
     homeYear: DEFAULT_CALENDAR_CONTEXT.year,
   };
@@ -828,9 +831,50 @@ function getDateFieldNames(columnKey) {
 function renderDateCell(cell, row, columnKey) {
   const { textField } = getDateFieldNames(columnKey);
   const displayValue = row[textField] || "";
+  const errorMessage = row[`${columnKey}Error`] || row.dateRangeError || "";
   cell.textContent = displayValue;
-  cell.title = row[`${columnKey}Error`] || "";
-  cell.classList.toggle("has-error", !!row[`${columnKey}Error`]);
+  cell.title = errorMessage;
+  cell.classList.toggle("has-error", !!errorMessage);
+}
+
+function validateRowDateRange(row, { notify = false } = {}) {
+  if (!row) {
+    return { ok: true, error: null };
+  }
+
+  const hasParseError = !!row.startDateError || !!row.endDateError;
+  if (hasParseError) {
+    row.dateRangeError = null;
+    return { ok: false, error: null };
+  }
+
+  const startDate = parseISODateValue(row.startDateISO);
+  const endDate = parseISODateValue(row.endDateISO);
+  if (!startDate || !endDate) {
+    row.dateRangeError = null;
+    return { ok: true, error: null };
+  }
+
+  if (endDate < startDate) {
+    const rangeError = "La fecha de fin no puede ser anterior a la fecha de inicio";
+    const hadRangeError = row.dateRangeError === rangeError;
+    row.dateRangeError = rangeError;
+    if (notify && !hadRangeError) {
+      showGridToast(rangeError);
+    }
+    return { ok: false, error: rangeError };
+  }
+
+  row.dateRangeError = null;
+  return { ok: true, error: null };
+}
+
+function validateAllRowsDateRanges() {
+  blocks.forEach((block) => {
+    block.rows.forEach((row) => {
+      validateRowDateRange(row);
+    });
+  });
 }
 
 function applyDateCellValue(row, columnKey, rawValue, { preserveRawOnInvalid = true } = {}) {
@@ -840,12 +884,14 @@ function applyDateCellValue(row, columnKey, rawValue, { preserveRawOnInvalid = t
     row[textField] = parsed.display;
     row[isoField] = parsed.iso;
     row[`${columnKey}Error`] = null;
+    validateRowDateRange(row, { notify: true });
     return { ok: true, display: row[textField], iso: row[isoField] };
   }
 
   row[textField] = preserveRawOnInvalid ? `${rawValue ?? ""}` : "";
   row[isoField] = null;
   row[`${columnKey}Error`] = parsed.error;
+  validateRowDateRange(row);
   return { ok: false, display: row[textField], iso: null, error: parsed.error };
 }
 
@@ -2912,6 +2958,7 @@ function renderMonthBlockGrid(root) {
 
 function renderRows() {
   updateCalendarContext(document);
+  validateAllRowsDateRanges();
   const leftBody = document.getElementById("left-body");
   const rightBody = document.getElementById("right-body");
 
