@@ -292,7 +292,11 @@
       year: now.getFullYear(),
       daysInMonth: daysInMonth(now.getMonth() + 1, now.getFullYear()),
     };
-    const titleText = root.querySelector(".panel-layout__month-title")?.textContent?.trim() || "";
+
+    const ownerDocument = root?.ownerDocument || document;
+    const titleElement = root?.querySelector?.(".panel-layout__month-title")
+      || ownerDocument.querySelector(".panel-layout__month-title");
+    const titleText = titleElement?.textContent?.trim() || "";
     const match = titleText.match(/^([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)\s+(\d{4})$/u);
     if (!match) {
       return fallback;
