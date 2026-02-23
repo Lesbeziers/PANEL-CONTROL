@@ -1267,9 +1267,8 @@
     };
 
     root.addEventListener("mouseover", (event) => {
-      const blockDayCountNode = event.target instanceof Element
-        ? event.target.closest(`.${BLOCK_DAY_COUNT_CLASS}`)
-        : null;
+      const targetElement = getEventTargetElement(event);
+      const blockDayCountNode = targetElement?.closest(`.${BLOCK_DAY_COUNT_CLASS}`) || null;
       const blockHeaderDayCell = blockDayCountNode?.closest(`#right-body .day-row.group .day-cell`) || null;
       if (!blockHeaderDayCell) {
         return;
@@ -1312,15 +1311,16 @@
     }, true);
 
     root.addEventListener("mouseout", (event) => {
-      const fromCountNode = event.target instanceof Element
-        ? event.target.closest(`.${BLOCK_DAY_COUNT_CLASS}`)
-        : null;
-      if (!fromCountNode) {
+      const targetElement = getEventTargetElement(event);
+      const fromCountNode = targetElement?.closest(`.${BLOCK_DAY_COUNT_CLASS}`) || null;
+      const fromBlockHeaderCell = targetElement?.closest("#right-body .day-row.group .day-cell") || null;
+
+      if (!fromCountNode && !fromBlockHeaderCell) {
         return;
       }
 
       const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
-      if (related && fromCountNode.contains(related)) {
+      if (related && ((fromCountNode && fromCountNode.contains(related)) || (fromBlockHeaderCell && fromBlockHeaderCell.contains(related)))) {
         return;
       }
 
@@ -1409,7 +1409,8 @@
     }, true);
 
     root.addEventListener("mouseout", (event) => {
-      const fromHeaderCell = event.target instanceof Element ? event.target.closest("#right-header-track .day-cell") : null;
+      const targetElement = getEventTargetElement(event);
+      const fromHeaderCell = targetElement?.closest("#right-header-track .day-cell") || null;
       if (!fromHeaderCell) {
         return;
       }
