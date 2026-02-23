@@ -114,6 +114,8 @@ let blocks = [
   createBlock({ id: "block-2", blockType: "Promo 20", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
   createBlock({ id: "block-3", blockType: "Promo 40", headerColor: "#8fb596", maxSimultaneous: 5 }),
   createBlock({ id: "block-4", blockType: "Promo 40", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
+  createBlock({ id: "block-5", blockType: "Otras Duraciones", headerColor: "#8fb596", maxSimultaneous: 5 }),
+  createBlock({ id: "block-6", blockType: "Otras duraciones", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
