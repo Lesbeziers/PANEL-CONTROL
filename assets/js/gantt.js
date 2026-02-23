@@ -564,9 +564,11 @@
       }
 
       const parent = current.parentElement;
-      if (stopAtSelector && parent.matches(stopAtSelector)) {
+      if (!parent || parent === stopContainer) {
         return null;
       }
+
+      current = parent;
     }
 
     return null;
