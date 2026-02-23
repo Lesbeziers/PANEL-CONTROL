@@ -2509,8 +2509,8 @@ function ensureContextMenuElement() {
   menuElement.className = "context-menu";
   menuElement.setAttribute("role", "menu");
   menuElement.innerHTML = `
-    <button type="button" class="context-menu__item" data-action="above" role="menuitem">Insertar fila encima</button>
-    <button type="button" class="context-menu__item" data-action="below" role="menuitem">Insertar fila debajo</button>
+    <button type="button" class="context-menu__item" data-action="above" role="menuitem">Añadir Filas encima</button>
+    <button type="button" class="context-menu__item" data-action="below" role="menuitem">Añadir Filas debajo</button>
     <div class="context-menu__divider" role="separator"></div>
     <button type="button" class="context-menu__item" data-action="duplicate-above" role="menuitem">Duplicar filas encima</button>
     <button type="button" class="context-menu__item" data-action="duplicate-below" role="menuitem">Duplicar filas debajo</button>
@@ -2533,13 +2533,23 @@ function ensureContextMenuElement() {
     }
 
     if (target.dataset.action === "above") {
-      insertRow(blockIndex, rowIndex);
+      const insertTarget = getDeleteTarget(blockIndex);
+      if (!insertTarget) {
+        closeContextMenu();
+        return;
+      }
+      insertRows(blockIndex, insertTarget.startRow, insertTarget.count);
       closeContextMenu();
       return;
     }
 
     if (target.dataset.action === "below") {
-      insertRow(blockIndex, rowIndex + 1);
+      const insertTarget = getDeleteTarget(blockIndex);
+      if (!insertTarget) {
+        closeContextMenu();
+        return;
+      }
+      insertRows(blockIndex, insertTarget.endRow + 1, insertTarget.count);
       closeContextMenu();
       return;
     }
