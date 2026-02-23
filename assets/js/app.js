@@ -861,24 +861,10 @@ function getOrderedRowsForMonth(block, calendarContext) {
     ? visibleRows.filter((item) => !isPlaceholderRow(item.row))
     : visibleRows;
   
-  const inheritedRows = rowsWithoutPlaceholders
-    .filter((item) => item.isInheritedInMonth)
-    .sort((a, b) => {
-      const startDiff = a.rowRange.startDate.getTime() - b.rowRange.startDate.getTime();
-      if (startDiff !== 0) {
-        return startDiff;
-      }
-
-      const idCompare = `${a.row.id ?? ""}`.localeCompare(`${b.row.id ?? ""}`);
-      if (idCompare !== 0) {
-        return idCompare;
-      }
-
-      return a.sourceIndex - b.sourceIndex;
-    });
-
-  const remainingRows = rowsWithoutPlaceholders.filter((item) => !item.isInheritedInMonth);
-  const orderedVisibleRows = [...inheritedRows, ...remainingRows];
+  // Mantener el orden fuente evita que los índices de fila salten durante el drag selection.
+  // El resto de interacciones (copiar/pegar, duplicar, borrar y autocompletar) dependen
+  // de que el orden visual y el índice interno de fila sean coherentes.
+  const orderedVisibleRows = rowsWithoutPlaceholders;
   if (orderedVisibleRows.length) {
     return orderedVisibleRows;
   }
