@@ -311,3 +311,19 @@
   pointer-events: none;
   white-space: nowrap;
 }
+
+#left-body .left-row.ganttOutOfMonthRow > div[data-column-key="title"],
+#left-body .left-row.ganttOutOfMonthRow > div[data-column-key="startDate"],
+#left-body .left-row.ganttOutOfMonthRow > div[data-column-key="endDate"],
+#left-body .left-row.ganttOutOfMonthRow > div[data-column-key="genre"],
+#left-body .left-row.ganttOutOfMonthRow > div[data-column-key="id"] {
+  color: transparent;
+}
+
+#left-body .left-row.ganttOutOfMonthRow > div[data-column-key="genre"]::before {
+  opacity: 0;
+}
+
+#right-body .day-row.ganttOutOfMonthRow .day-cell {
+  background: transparent;
+}
