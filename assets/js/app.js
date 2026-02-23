@@ -3111,7 +3111,7 @@ function renderRows() {
   blocks.forEach((block, blockIndex) => {
     const groupLeftRow = createLeftRow({
       group: true,
-      cells: ["", "", { left: block.blockType.toUpperCase(), right: "(Máximo 5 simultáneas)" }, "", "", "", ""],
+      cells: ["", "", { left: block.blockType.toUpperCase(), right: "(Máx. 5 simultáneas)" }, "", "", "", ""],
       onAddRow: () => insertRow(blockIndex, 0),
       canDeleteRowsInGroup: canDeleteRows(blockIndex),
       groupBlockIndex: blockIndex,
