@@ -454,7 +454,7 @@
       return;
     }
 
-    dayRow.querySelectorAll(`.day-cell.${RANGE_CELL_CLASS}`).forEach((cell) => {
+    dayRow.querySelectorAll(".day-cell").forEach((cell) => {
       cell.classList.remove(RANGE_CELL_CLASS);
       cell.classList.remove(RANGE_START_CLASS);
       cell.classList.remove(RANGE_END_CLASS);
@@ -805,6 +805,7 @@
       cell.classList.remove(WEEKEND_CELL_CLASS);
       cell.classList.remove(BLOCK_OVER_MAX_CLASS);
       cell.removeAttribute(DAY_ATTR);
+      cell.querySelectorAll(`.${RANGE_MARKER_CLASS}`).forEach((marker) => marker.remove());
       cell.querySelector(`.${BLOCK_DAY_COUNT_CLASS}`)?.remove();
     });
 
