@@ -5,6 +5,11 @@
   border-bottom: none;
 }
 
+
+.day-row .day-cell.inactive {
+  pointer-events: none;
+}
+
 #right-body .day-row .day-cell.ganttWeekendCell {
   background: rgb(255 0 0 / 0.05);
 }
@@ -112,7 +117,7 @@
   transition: font-size 120ms ease, font-weight 120ms ease;
 }
 
-#right-body .day-row.group .day-cell .ganttBlockDayCount:hover {
+#right-body .day-row.group .day-cell:not(.inactive) .ganttBlockDayCount:hover {
   font-size: 16px;
   font-weight: 900;
 }
