@@ -26,6 +26,7 @@
   const BLOCK_DAY_HOVER_CELL_CLASS = "ganttBlockDayHoverCell";
   const BLOCK_DAY_BAND_CLASS = "ganttBlockDayBandVisible";
   const WEEKEND_CELL_CLASS = "ganttWeekendCell";
+  const OUT_OF_MONTH_ROW_CLASS = "ganttOutOfMonthRow";
   const TOOLTIP_CLASS = "ganttBarTooltip";
   const BAR_HOVER_FOCUS_DELAY_MS = 140;
   const BAND_COLOR_GREEN = "#b5d2b3";
@@ -429,6 +430,28 @@
     };
   }
 
+    function rowIsOutsideVisibleMonth(leftRow, calendarContext) {
+    const rowRange = getDateRangeForRow(leftRow, calendarContext);
+    if (!rowRange) {
+      return false;
+    }
+
+    const monthRange = getVisibleMonthRange(calendarContext);
+    return rowRange.endDate < monthRange.startDate || rowRange.startDate > monthRange.endDate;
+  }
+
+  function syncOutOfMonthRowState(dayRow, leftRow, calendarContext) {
+    if (!dayRow || !leftRow || !isDataRow(dayRow, leftRow)) {
+      dayRow?.classList.remove(OUT_OF_MONTH_ROW_CLASS);
+      leftRow?.classList.remove(OUT_OF_MONTH_ROW_CLASS);
+      return;
+    }
+
+    const isOutOfMonth = rowIsOutsideVisibleMonth(leftRow, calendarContext);
+    dayRow.classList.toggle(OUT_OF_MONTH_ROW_CLASS, isOutOfMonth);
+    leftRow.classList.toggle(OUT_OF_MONTH_ROW_CLASS, isOutOfMonth);
+  }
+
   function detectCalendarColumns(headerTrack) {
     const headerCells = [...headerTrack.children];
     return headerCells.reduce((acc, headerCell, columnIndex) => {
@@ -643,7 +666,8 @@
 
   function paintRangeForRow(dayRow, leftRow, calendarContext) {
     clearRangeCells(dayRow);
-
+    syncOutOfMonthRowState(dayRow, leftRow, calendarContext);
+    
     const bandColor = getBlockBandColor(dayRow);
     if (bandColor) {
       dayRow.style.setProperty("--ganttBarColor", bandColor);
