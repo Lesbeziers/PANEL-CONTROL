@@ -5,6 +5,10 @@
   border-bottom: none;
 }
 
+#right-body .day-row .day-cell.ganttWeekendCell {
+  background: rgb(255 0 0 / 0.08);
+}
+
 #right-body .day-row:not(.group) .day-cell::before {
   content: "";
   position: absolute;
