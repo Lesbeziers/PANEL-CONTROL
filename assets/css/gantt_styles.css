@@ -187,6 +187,13 @@
   font-size: 14px;
 }
 
+#right-header-track .day-cell.ganttWeekendCell:not(.inactive):hover,
+#right-header-track .day-cell.ganttWeekendCell.ganttBlockDayHoverCell {
+  background: #333333;
+  font-weight: 900;
+  font-size: 14px;
+}
+
 #left-body .left-row.ganttFocusDim > div {
   color: rgb(from currentColor r g b / 0.2);
 }
