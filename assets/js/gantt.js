@@ -799,7 +799,9 @@
       cell.classList.remove(RANGE_START_FLAT_CLASS);
       cell.classList.remove(RANGE_END_FLAT_CLASS);
       cell.classList.remove(WEEKEND_CELL_CLASS);
+      cell.classList.remove(BLOCK_OVER_MAX_CLASS);
       cell.removeAttribute(DAY_ATTR);
+      cell.querySelector(`.${BLOCK_DAY_COUNT_CLASS}`)?.remove();
     });
 
     const dayRows = [...root.querySelectorAll("#right-body .day-row")];
@@ -809,6 +811,13 @@
       calendarColumns.forEach(({ columnIndex, day }) => {
         const targetCell = rowCells[columnIndex];
         if (!targetCell) {
+          return;
+        }
+
+        const isInsideCurrentMonth = day <= calendarContext.daysInMonth;
+        if (!isInsideCurrentMonth) {
+          targetCell.removeAttribute(DAY_ATTR);
+          targetCell.classList.remove(WEEKEND_CELL_CLASS);
           return;
         }
 
