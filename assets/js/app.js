@@ -193,6 +193,8 @@ function applyCalendarContextToView(root = document) {
     detail: { ...currentCalendarContext },
   }));
 
+  renderRows();
+
   syncFillHandlePosition();
   syncCopyAntsPosition();
 }
@@ -645,6 +647,97 @@ function formatDateISO(day, month, year) {
   const dd = String(day).padStart(2, "0");
   const mm = String(month).padStart(2, "0");
   return `${year}-${mm}-${dd}`;
+}
+
+function parseISODateValue(value) {
+  const normalized = `${value ?? ""}`.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return null;
+  }
+
+  const [yearText, monthText, dayText] = normalized.split("-");
+  const year = Number.parseInt(yearText, 10);
+  const month = Number.parseInt(monthText, 10);
+  const day = Number.parseInt(dayText, 10);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(month, year)) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day);
+}
+
+function getRowRange(row) {
+  if (!row) {
+    return null;
+  }
+
+  const startDate = parseISODateValue(row.startDateISO);
+  const endDate = parseISODateValue(row.endDateISO);
+  if (!startDate || !endDate || endDate < startDate) {
+    return null;
+  }
+
+  return { startDate, endDate };
+}
+
+function getVisibleMonthRange(calendarContext) {
+  return {
+    startDate: new Date(calendarContext.year, calendarContext.month - 1, 1),
+    endDate: new Date(calendarContext.year, calendarContext.month, 0),
+  };
+}
+
+function intersectsVisibleMonth(rowRange, monthRange) {
+  if (!rowRange || !monthRange) {
+    return false;
+  }
+
+  return rowRange.startDate <= monthRange.endDate && rowRange.endDate >= monthRange.startDate;
+}
+
+function getOrderedRowsForMonth(block, calendarContext) {
+  const monthRange = getVisibleMonthRange(calendarContext);
+  const indexedRows = block.rows.map((row, sourceIndex) => {
+    const rowRange = getRowRange(row);
+    const isVisibleInMonth = intersectsVisibleMonth(rowRange, monthRange);
+    const isInheritedInMonth =
+      !!rowRange
+      && isVisibleInMonth
+      && (
+        rowRange.startDate.getMonth() + 1 !== calendarContext.month
+        || rowRange.startDate.getFullYear() !== calendarContext.year
+      );
+
+    return {
+      row,
+      sourceIndex,
+      rowRange,
+      isInheritedInMonth,
+    };
+  });
+
+  const inheritedRows = indexedRows
+    .filter((item) => item.isInheritedInMonth)
+    .sort((a, b) => {
+      const startDiff = a.rowRange.startDate.getTime() - b.rowRange.startDate.getTime();
+      if (startDiff !== 0) {
+        return startDiff;
+      }
+
+      const idCompare = `${a.row.id ?? ""}`.localeCompare(`${b.row.id ?? ""}`);
+      if (idCompare !== 0) {
+        return idCompare;
+      }
+
+      return a.sourceIndex - b.sourceIndex;
+    });
+
+  const remainingRows = indexedRows.filter((item) => !item.isInheritedInMonth);
+  return [...inheritedRows, ...remainingRows];
 }
 
 function parseDateInput(
@@ -2834,7 +2927,8 @@ function renderRows() {
 
     leftBody.appendChild(groupLeftRow);
     rightBody.appendChild(groupDayRow);
-    block.rows.forEach((row, rowIndex) => {
+    const orderedRows = getOrderedRowsForMonth(block, currentCalendarContext);
+    orderedRows.forEach(({ row, sourceIndex }) => {
       const leftRow = createLeftRow();
       const dayRow = createDayRow();
       
@@ -2842,7 +2936,7 @@ function renderRows() {
       attachTitleCell(leftRow.children[2], row);
 
       leftRow.children[1].dataset.blockIndex = String(blockIndex);
-      leftRow.children[1].dataset.rowIndex = String(rowIndex);
+      leftRow.children[1].dataset.rowIndex = String(sourceIndex);
       leftRow.children[1].dataset.rowId = row.rowKey;
       leftRow.children[1].dataset.columnKey = "listo";
       if (isSelectedCellState(row, "listo")) {
@@ -2851,7 +2945,7 @@ function renderRows() {
       }
 
       leftRow.children[2].dataset.blockIndex = String(blockIndex);
-      leftRow.children[2].dataset.rowIndex = String(rowIndex);
+      leftRow.children[2].dataset.rowIndex = String(sourceIndex);
       leftRow.children[2].dataset.rowId = row.rowKey;
       leftRow.children[2].dataset.columnKey = "title";
       leftRow.children[2].tabIndex = 0;
@@ -2862,7 +2956,7 @@ function renderRows() {
 
       attachDateCell(leftRow.children[3], row, "startDate");
       leftRow.children[3].dataset.blockIndex = String(blockIndex);
-      leftRow.children[3].dataset.rowIndex = String(rowIndex);
+      leftRow.children[3].dataset.rowIndex = String(sourceIndex);
       leftRow.children[3].dataset.rowId = row.rowKey;
       leftRow.children[3].dataset.columnKey = "startDate";
       if (isSelectedCellState(row, "startDate")) {
@@ -2872,7 +2966,7 @@ function renderRows() {
 
       attachDateCell(leftRow.children[4], row, "endDate");
       leftRow.children[4].dataset.blockIndex = String(blockIndex);
-      leftRow.children[4].dataset.rowIndex = String(rowIndex);
+      leftRow.children[4].dataset.rowIndex = String(sourceIndex);
       leftRow.children[4].dataset.rowId = row.rowKey;
       leftRow.children[4].dataset.columnKey = "endDate";
       if (isSelectedCellState(row, "endDate")) {
@@ -2882,7 +2976,7 @@ function renderRows() {
 
       attachGenreCell(leftRow.children[5], row);
       leftRow.children[5].dataset.blockIndex = String(blockIndex);
-      leftRow.children[5].dataset.rowIndex = String(rowIndex);
+      leftRow.children[5].dataset.rowIndex = String(sourceIndex);
       leftRow.children[5].dataset.rowId = row.rowKey;
       leftRow.children[5].dataset.columnKey = "genre";
       if (isSelectedCellState(row, "genre")) {
@@ -2892,7 +2986,7 @@ function renderRows() {
 
       attachIdTextCell(leftRow.children[6], row);
       leftRow.children[6].dataset.blockIndex = String(blockIndex);
-      leftRow.children[6].dataset.rowIndex = String(rowIndex);
+      leftRow.children[6].dataset.rowIndex = String(sourceIndex);
       leftRow.children[6].dataset.rowId = row.rowKey;
       leftRow.children[6].dataset.columnKey = "id";
       if (isSelectedCellState(row, "id")) {
@@ -2901,8 +2995,8 @@ function renderRows() {
       }
       leftRow.children[6].textContent = "";
 
-      leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
-      dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, rowIndex));
+      leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, sourceIndex));
+      dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, sourceIndex));
 
       leftBody.appendChild(leftRow);
       rightBody.appendChild(dayRow);
