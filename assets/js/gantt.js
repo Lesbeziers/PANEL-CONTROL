@@ -455,7 +455,8 @@
   function detectCalendarColumns(headerTrack) {
     const headerCells = [...headerTrack.children];
     return headerCells.reduce((acc, headerCell, columnIndex) => {
-      const day = parseDayLabel(headerCell.textContent);
+      const dayFromAttr = parseDayLabel(headerCell.getAttribute(DAY_ATTR));
+      const day = dayFromAttr ?? parseDayLabel(headerCell.textContent);
       if (day !== null) {
         acc.push({ columnIndex, day });
       }
@@ -821,6 +822,12 @@
       return;
     }
 
+    const headerDayCells = [...headerTrack.querySelectorAll(".day-cell")];
+    headerDayCells.forEach((cell) => {
+      cell.classList.remove(WEEKEND_CELL_CLASS);
+      cell.removeAttribute(DAY_ATTR);
+    });
+
     const allDayCells = root.querySelectorAll("#right-body .day-row .day-cell");
     allDayCells.forEach((cell) => {
       cell.classList.remove(RANGE_CELL_CLASS);
@@ -833,6 +840,21 @@
       cell.removeAttribute(DAY_ATTR);
       cell.querySelectorAll(`.${RANGE_MARKER_CLASS}`).forEach((marker) => marker.remove());
       cell.querySelector(`.${BLOCK_DAY_COUNT_CLASS}`)?.remove();
+    });
+
+    calendarColumns.forEach(({ columnIndex, day }) => {
+      const headerCell = headerDayCells[columnIndex];
+      if (!headerCell) {
+        return;
+      }
+
+      const isInsideCurrentMonth = day <= calendarContext.daysInMonth;
+      if (!isInsideCurrentMonth) {
+        return;
+      }
+
+      headerCell.setAttribute(DAY_ATTR, String(day));
+      headerCell.classList.toggle(WEEKEND_CELL_CLASS, isWeekendDay(day, calendarContext));
     });
 
     const dayRows = [...root.querySelectorAll("#right-body .day-row")];
