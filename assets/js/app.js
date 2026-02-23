@@ -66,12 +66,18 @@ function newRow() {
     startDateISO: null,
     endDateText: "",
     endDateISO: null,
+    homeMonth: DEFAULT_CALENDAR_CONTEXT.month,
+    homeYear: DEFAULT_CALENDAR_CONTEXT.year,
   };
 }
 
-function newRowForBlock(blockType) {
+function newRowForBlock(blockType, homeContext = DEFAULT_CALENDAR_CONTEXT) {
   const row = newRow();
   row.blockType = blockType;
+  if (homeContext && Number.isInteger(homeContext.month) && Number.isInteger(homeContext.year)) {
+    row.homeMonth = homeContext.month;
+    row.homeYear = homeContext.year;
+  }
   return row;
 }
 
@@ -702,8 +708,17 @@ function intersectsVisibleMonth(rowRange, monthRange) {
 function getOrderedRowsForMonth(block, calendarContext) {
   const monthRange = getVisibleMonthRange(calendarContext);
   const indexedRows = block.rows.map((row, sourceIndex) => {
+    if (!Number.isInteger(row.homeMonth) || !Number.isInteger(row.homeYear)) {
+      row.homeMonth = calendarContext.month;
+      row.homeYear = calendarContext.year;
+    }
+
     const rowRange = getRowRange(row);
     const isVisibleInMonth = intersectsVisibleMonth(rowRange, monthRange);
+    const isUnscheduledInMonth = !rowRange
+      && row.homeMonth === calendarContext.month
+      && row.homeYear === calendarContext.year;
+    const isVisibleInCurrentMonth = isVisibleInMonth || isUnscheduledInMonth;
     const isInheritedInMonth =
       !!rowRange
       && isVisibleInMonth
@@ -716,11 +731,14 @@ function getOrderedRowsForMonth(block, calendarContext) {
       row,
       sourceIndex,
       rowRange,
+      isVisibleInCurrentMonth,
       isInheritedInMonth,
     };
   });
 
-  const inheritedRows = indexedRows
+  const visibleRows = indexedRows.filter((item) => item.isVisibleInCurrentMonth);
+
+  const inheritedRows = visibleRows
     .filter((item) => item.isInheritedInMonth)
     .sort((a, b) => {
       const startDiff = a.rowRange.startDate.getTime() - b.rowRange.startDate.getTime();
@@ -736,7 +754,7 @@ function getOrderedRowsForMonth(block, calendarContext) {
       return a.sourceIndex - b.sourceIndex;
     });
 
-  const remainingRows = indexedRows.filter((item) => !item.isInheritedInMonth);
+  const remainingRows = visibleRows.filter((item) => !item.isInheritedInMonth);
   return [...inheritedRows, ...remainingRows];
 }
 
@@ -2183,7 +2201,7 @@ function insertRows(blockIndex, atIndex, count = 1) {
   }
 
   const nextRows = [...block.rows];
-  const rowsToInsert = Array.from({ length: count }, () => newRowForBlock(block.blockType));
+  const rowsToInsert = Array.from({ length: count }, () => newRowForBlock(block.blockType, currentCalendarContext));
   nextRows.splice(atIndex, 0, ...rowsToInsert);
   blocks[blockIndex] = { ...block, rows: nextRows };
   renderRows();
@@ -2213,7 +2231,7 @@ function deleteRowsInBlock(blockIndex, startRow, endRow) {
   nextRows.splice(safeStart, removeCount);
 
   if (!nextRows.length) {
-    nextRows.push(newRowForBlock(block.blockType));
+    nextRows.push(newRowForBlock(block.blockType, currentCalendarContext));
   }
 
   blocks[blockIndex] = { ...block, rows: nextRows };
