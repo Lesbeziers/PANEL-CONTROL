@@ -14,7 +14,7 @@
 }
 
 #right-body .day-row .day-cell.ganttBarCell.ganttWeekendCell {
-  background: transparent;
+  background: rgb(255 0 0 / 0.05);
 }
 
 #right-body .day-row:not(.group) .day-cell::before {
@@ -49,6 +49,12 @@
   right: -1px;
   background: var(--ganttBarColor, var(--gantt-band-color, #b5d2b3));
   pointer-events: none;
+}
+
+#right-body .day-row .day-cell.ganttBarCell.ganttWeekendCell::after {
+  background:
+    linear-gradient(rgb(255 0 0 / 0.1), rgb(255 0 0 / 0.1)),
+    var(--ganttBarColor, var(--gantt-band-color, #b5d2b3));
 }
 
 .day-row .day-cell.ganttBarCell.ganttBarStart::after {
