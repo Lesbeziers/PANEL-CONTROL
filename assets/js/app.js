@@ -2447,25 +2447,33 @@ function ensureContextMenuElement() {
   `;
 
   menuElement.addEventListener("click", (event) => {
-    const target = event.target.closest("[data-action]");
+    const clickTarget = event.target instanceof Element ? event.target : null;
+    const target = clickTarget ? clickTarget.closest("[data-action]") : null;
     if (!target || !contextMenu.open) {
       return;
     }
 
+    const blockIndex = Number.parseInt(contextMenu.blockIndex, 10);
+    const rowIndex = Number.parseInt(contextMenu.rowIndex, 10);
+    if (!Number.isInteger(blockIndex) || !Number.isInteger(rowIndex)) {
+      closeContextMenu();
+      return;
+    }
+
     if (target.dataset.action === "above") {
-      insertRow(contextMenu.blockIndex, contextMenu.rowIndex);
+      insertRow(blockIndex, rowIndex);
       closeContextMenu();
       return;
     }
 
     if (target.dataset.action === "below") {
-      insertRow(contextMenu.blockIndex, contextMenu.rowIndex + 1);
+      insertRow(blockIndex, rowIndex + 1);
       closeContextMenu();
       return;
     }
 
     if (target.dataset.action === "delete") {
-      const deleteTarget = getDeleteTarget(contextMenu.blockIndex);
+      const deleteTarget = getDeleteTarget(blockIndex);
       if (!deleteTarget) {
         return;
       }
