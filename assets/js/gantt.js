@@ -1214,20 +1214,27 @@
     };
 
     root.addEventListener("mouseover", (event) => {
-      const hoverCount = event.target instanceof Element ? event.target.closest(`#right-body .day-row.group .day-cell .${BLOCK_DAY_COUNT_CLASS}`) : null;
-      if (!hoverCount) {
+      const blockHeaderDayCell = event.target instanceof Element
+        ? event.target.closest(`#right-body .day-row.group .day-cell`)
+        : null;
+      if (!blockHeaderDayCell) {
         return;
       }
 
-      const blockHeaderDayCell = hoverCount.closest(".day-cell");
-      if (!blockHeaderDayCell) {
+      const hoverCount = blockHeaderDayCell.querySelector(`.${BLOCK_DAY_COUNT_CLASS}`);
+      const countText = hoverCount?.textContent?.trim() || "";
+      if (!countText) {
+        return;
+      }
+
+      const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
+      if (related && blockHeaderDayCell.contains(related)) {
         return;
       }
 
       const day = parseDayLabel(blockHeaderDayCell.getAttribute(DAY_ATTR) || blockHeaderDayCell.textContent);
       const headerRow = blockHeaderDayCell.closest(".day-row.group");
-      const countText = hoverCount.textContent?.trim() || "";
-      if (day === null || !headerRow || !countText) {
+      if (day === null || !headerRow) {
         return;
       }
 
@@ -1244,29 +1251,22 @@
         window.clearTimeout(blockDayHoverTimerId);
       }
 
-      pendingBlockDayHover = { day, headerRow, blockHeaderDayCell };
-      blockDayHoverTimerId = window.setTimeout(() => {
-        blockDayHoverTimerId = null;
-        const pendingHover = pendingBlockDayHover;
-        pendingBlockDayHover = null;
-        if (!pendingHover) {
-          return;
-        }
-
-        clearBlockFocus(root);
-        clearGlobalHeaderDayFocus(root);
-        applyBlockDayFocus(root, pendingHover.headerRow, pendingHover.blockHeaderDayCell, pendingHover.day);
-      }, BAR_HOVER_FOCUS_DELAY_MS);
+      pendingBlockDayHover = null;
+      clearBlockFocus(root);
+      clearGlobalHeaderDayFocus(root);
+      applyBlockDayFocus(root, headerRow, blockHeaderDayCell, day);
     }, true);
 
     root.addEventListener("mouseout", (event) => {
-      const fromHoverCount = event.target instanceof Element ? event.target.closest(`#right-body .day-row.group .day-cell .${BLOCK_DAY_COUNT_CLASS}`) : null;
-      if (!fromHoverCount) {
+      const fromCell = event.target instanceof Element
+        ? event.target.closest(`#right-body .day-row.group .day-cell`)
+        : null;
+      if (!fromCell) {
         return;
       }
 
       const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
-      if (related?.closest?.(`#right-body .day-row.group .day-cell .${BLOCK_DAY_COUNT_CLASS}`) === fromHoverCount) {
+      if (related && fromCell.contains(related)) {
         return;
       }
 
