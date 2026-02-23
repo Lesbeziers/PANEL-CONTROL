@@ -50,6 +50,7 @@ const MONTH_LABEL_TO_NUMBER = {
   diciembre: 12,
 };
 const DATE_COLUMNS = new Set(["startDate", "endDate"]);
+const DEFAULT_MAX_SIMULTANEOUS = 5;
 
 let rowId = 0;
 
@@ -84,11 +85,35 @@ function newRowForBlock(blockType, homeContext = DEFAULT_CALENDAR_CONTEXT) {
   return row;
 }
 
+function normalizeMaxSimultaneous(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_SIMULTANEOUS;
+}
+
+function createBlock({ id, blockType, headerColor, maxSimultaneous = DEFAULT_MAX_SIMULTANEOUS, rows = null }) {
+  const resolvedBlockType = `${blockType ?? ""}`.trim();
+  const resolvedRows = Array.isArray(rows) && rows.length
+    ? rows
+    : [newRowForBlock(resolvedBlockType)];
+
+  return {
+    id,
+    blockType: resolvedBlockType,
+    headerColor,
+    maxSimultaneous: normalizeMaxSimultaneous(maxSimultaneous),
+    rows: resolvedRows,
+  };
+}
+
+function getMaxSimultaneousLabel(maxSimultaneous) {
+  return `(Máx. ${normalizeMaxSimultaneous(maxSimultaneous)} simultáneas)`;
+}
+
 let blocks = [
-  { id: "block-1", blockType: "Promo 20", headerColor: "#8fb596", rows: [newRowForBlock("Promo 20")] },
-  { id: "block-2", blockType: "Promo 20", headerColor: "#e8cd8e", rows: [newRowForBlock("Promo 20")] },
-  { id: "block-3", blockType: "Promo 40", headerColor: "#8fb596", rows: [newRowForBlock("Promo 40")] },
-  { id: "block-4", blockType: "Promo 40", headerColor: "#e8cd8e", rows: [newRowForBlock("Promo 40")] },
+  createBlock({ id: "block-1", blockType: "Promo 20", headerColor: "#8fb596", maxSimultaneous: 5 }),
+  createBlock({ id: "block-2", blockType: "Promo 20", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
+  createBlock({ id: "block-3", blockType: "Promo 40", headerColor: "#8fb596", maxSimultaneous: 5 }),
+  createBlock({ id: "block-4", blockType: "Promo 40", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
@@ -3113,7 +3138,7 @@ function renderRows() {
   blocks.forEach((block, blockIndex) => {
     const groupLeftRow = createLeftRow({
       group: true,
-      cells: ["", "", { left: block.blockType.toUpperCase(), right: "(Máx. 5 simultáneas)" }, "", "", "", ""],
+      cells: ["", "", { left: block.blockType.toUpperCase(), right: getMaxSimultaneousLabel(block.maxSimultaneous) }, "", "", "", ""],
       onAddRow: () => insertRow(blockIndex, 0),
       canDeleteRowsInGroup: canDeleteRows(blockIndex),
       groupBlockIndex: blockIndex,
