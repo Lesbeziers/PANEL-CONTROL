@@ -1567,8 +1567,12 @@
     attachHoverFocusListeners(monthBlock);
 
     document.addEventListener("calendar:month-change", (event) => {
-      const target = event.target instanceof Element ? event.target : null;
-      if (!target || (!target.contains(monthBlock) && !monthBlock.contains(target))) {
+      const target = event.target;
+      const isDocumentTarget = target === document;
+      const isRelatedElement = target instanceof Element
+        && (target.contains(monthBlock) || monthBlock.contains(target));
+
+      if (!isDocumentTarget && !isRelatedElement) {
         return;
       }
 
