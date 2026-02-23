@@ -693,6 +693,26 @@ function getRowRange(row) {
   return { startDate, endDate };
 }
 
+function isPlaceholderRow(row) {
+  if (!row) {
+    return false;
+  }
+
+  const hasDateRange = !!getRowRange(row);
+  if (hasDateRange) {
+    return false;
+  }
+
+  return !row.listo
+    && !`${row.title ?? ""}`.trim()
+    && !`${row.genre ?? ""}`.trim()
+    && !`${row.id ?? ""}`.trim()
+    && !`${row.startDateText ?? ""}`.trim()
+    && !`${row.endDateText ?? ""}`.trim()
+    && !`${row.startDateISO ?? ""}`.trim()
+    && !`${row.endDateISO ?? ""}`.trim();
+}
+
 function getVisibleMonthRange(calendarContext) {
   return {
     startDate: new Date(calendarContext.year, calendarContext.month - 1, 1),
@@ -740,8 +760,12 @@ function getOrderedRowsForMonth(block, calendarContext) {
   });
 
   const visibleRows = indexedRows.filter((item) => item.isVisibleInCurrentMonth);
-
-  const inheritedRows = visibleRows
+  const hasVisibleScheduledRows = visibleRows.some((item) => !!item.rowRange);
+  const rowsWithoutPlaceholders = hasVisibleScheduledRows
+    ? visibleRows.filter((item) => !isPlaceholderRow(item.row))
+    : visibleRows;
+  
+  const inheritedRows = rowsWithoutPlaceholders
     .filter((item) => item.isInheritedInMonth)
     .sort((a, b) => {
       const startDiff = a.rowRange.startDate.getTime() - b.rowRange.startDate.getTime();
@@ -757,7 +781,7 @@ function getOrderedRowsForMonth(block, calendarContext) {
       return a.sourceIndex - b.sourceIndex;
     });
 
-  const remainingRows = visibleRows.filter((item) => !item.isInheritedInMonth);
+  const remainingRows = rowsWithoutPlaceholders.filter((item) => !item.isInheritedInMonth);
   const orderedVisibleRows = [...inheritedRows, ...remainingRows];
   if (orderedVisibleRows.length) {
     return orderedVisibleRows;
