@@ -25,6 +25,7 @@
   const BLOCK_DAY_DIM_CLASS = "ganttBlockDayDim";
   const BLOCK_DAY_HOVER_CELL_CLASS = "ganttBlockDayHoverCell";
   const BLOCK_DAY_BAND_CLASS = "ganttBlockDayBandVisible";
+  const WEEKEND_CELL_CLASS = "ganttWeekendCell";
   const TOOLTIP_CLASS = "ganttBarTooltip";
   const BAR_HOVER_FOCUS_DELAY_MS = 140;
   const BAND_COLOR_GREEN = "#b5d2b3";
@@ -435,6 +436,15 @@
     }, []);
   }
 
+    function isWeekendDay(day, calendarContext) {
+    if (!Number.isInteger(day) || !calendarContext) {
+      return false;
+    }
+
+    const weekDay = new Date(calendarContext.year, calendarContext.month - 1, day).getDay();
+    return weekDay === 0 || weekDay === 6;
+  }
+
   function clearRangeCells(dayRow) {
     if (!dayRow) {
       return;
@@ -788,6 +798,7 @@
       cell.classList.remove(RANGE_END_CLASS);
       cell.classList.remove(RANGE_START_FLAT_CLASS);
       cell.classList.remove(RANGE_END_FLAT_CLASS);
+      cell.classList.remove(WEEKEND_CELL_CLASS);
       cell.removeAttribute(DAY_ATTR);
     });
 
@@ -802,6 +813,7 @@
         }
 
         targetCell.setAttribute(DAY_ATTR, String(day));
+        targetCell.classList.toggle(WEEKEND_CELL_CLASS, isWeekendDay(day, calendarContext));
       });
 
       if (!isDataRow(row, leftRows[rowIndex])) {
