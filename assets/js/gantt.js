@@ -743,13 +743,13 @@
       return null;
     }
 
-    const scopedMatch = normalized.match(/m[aá]ximo\s*(\d+)\s*simult[aá]neas/i);
+    const scopedMatch = normalized.match(/m[aá]x(?:imo)?\.?\s*(\d+)\s*simult[aá]neas/i);
     if (scopedMatch) {
       const scopedValue = Number.parseInt(scopedMatch[1], 10);
       return Number.isInteger(scopedValue) ? scopedValue : null;
     }
 
-    const fallbackMatch = normalized.match(/\(\s*m[aá]ximo[^\d]*(\d+)\s*simult[aá]neas\s*\)/i);
+    const fallbackMatch = normalized.match(/\(\s*m[aá]x(?:imo)?\.?[^\d]*(\d+)\s*simult[aá]neas\s*\)/i);
     if (fallbackMatch) {
       const fallbackValue = Number.parseInt(fallbackMatch[1], 10);
       return Number.isInteger(fallbackValue) ? fallbackValue : null;
