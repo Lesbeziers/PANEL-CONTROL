@@ -115,6 +115,17 @@ let deleteConfirmElement = null;
 let deleteConfirmState = null;
 let currentCalendarContext = { ...DEFAULT_CALENDAR_CONTEXT };
 
+function getMonthTitleText(month, year) {
+  const monthName = MONTH_NAMES_ES[month - 1] || "";
+  return `${monthName.toUpperCase()} ${year}`;
+}
+
+function getMonthAriaLabel(month, year) {
+  const monthName = MONTH_NAMES_ES[month - 1] || "";
+  const readableName = `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)}`;
+  return `MonthBlockGrid ${readableName} ${year}`;
+}
+
 function normalizeMonthLabel(value) {
   return `${value ?? ""}`
     .trim()
@@ -149,6 +160,81 @@ function updateCalendarContext(root = document) {
   const titleElement = root.querySelector?.(".panel-layout__month-title");
   currentCalendarContext = resolveCalendarContextFromTitle(titleElement?.textContent);
   return currentCalendarContext;
+}
+
+function applyCalendarContextToView(root = document) {
+  const titleElement = root.querySelector?.(".panel-layout__month-title");
+  const monthBlock = root.querySelector?.(".month-block");
+  const dayHeaderCells = root.querySelectorAll?.("#right-header-track .day-cell") || [];
+  const dayRows = root.querySelectorAll?.("#right-body .day-row") || [];
+
+  if (titleElement) {
+    titleElement.textContent = getMonthTitleText(currentCalendarContext.month, currentCalendarContext.year);
+  }
+
+  if (monthBlock) {
+    monthBlock.setAttribute("aria-label", getMonthAriaLabel(currentCalendarContext.month, currentCalendarContext.year));
+  }
+
+  dayHeaderCells.forEach((cell, index) => {
+    const day = index + 1;
+    cell.classList.toggle("inactive", day > currentCalendarContext.daysInMonth);
+  });
+
+  dayRows.forEach((row) => {
+    [...row.children].forEach((cell, index) => {
+      const day = index + 1;
+      cell.classList.toggle("inactive", day > currentCalendarContext.daysInMonth);
+    });
+  });
+
+  root.dispatchEvent(new CustomEvent("calendar:month-change", {
+    bubbles: true,
+    detail: { ...currentCalendarContext },
+  }));
+
+  syncFillHandlePosition();
+  syncCopyAntsPosition();
+}
+
+function shiftCalendarMonth(deltaMonths, root = document) {
+  if (!Number.isInteger(deltaMonths) || deltaMonths === 0) {
+    return;
+  }
+
+  const date = new Date(currentCalendarContext.year, currentCalendarContext.month - 1 + deltaMonths, 1);
+  currentCalendarContext = {
+    month: date.getMonth() + 1,
+    year: date.getFullYear(),
+    daysInMonth: daysInMonth(date.getMonth() + 1, date.getFullYear()),
+  };
+  applyCalendarContextToView(root);
+}
+
+function attachMonthNavigation(root) {
+  const navArrows = root.querySelectorAll(".panel-layout__month-nav-arrow");
+  if (!navArrows.length) {
+    return;
+  }
+
+  navArrows.forEach((arrow, index) => {
+    const delta = index === 0 ? -1 : 1;
+    arrow.setAttribute("role", "button");
+    arrow.setAttribute("tabindex", "0");
+    arrow.setAttribute("aria-label", delta < 0 ? "Mes anterior" : "Mes siguiente");
+
+    arrow.addEventListener("click", () => {
+      shiftCalendarMonth(delta, root);
+    });
+
+    arrow.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      event.preventDefault();
+      shiftCalendarMonth(delta, root);
+    });
+  });
 }
 
 function getDeleteTarget(preferredBlockIndex = null) {
@@ -2633,10 +2719,9 @@ function attachIdTextCell(cell, row) {
 }
 
 function renderMonthBlockGrid(root) {
-  const defaultMonthName = MONTH_NAMES_ES[DEFAULT_CALENDAR_CONTEXT.month - 1] || "";
-  const monthTitle = `${defaultMonthName.toUpperCase()} ${DEFAULT_CALENDAR_CONTEXT.year}`;
-  const monthAriaLabel = `MonthBlockGrid ${defaultMonthName.charAt(0).toUpperCase()}${defaultMonthName.slice(1)} ${DEFAULT_CALENDAR_CONTEXT.year}`;
-
+  const monthTitle = getMonthTitleText(DEFAULT_CALENDAR_CONTEXT.month, DEFAULT_CALENDAR_CONTEXT.year);
+  const monthAriaLabel = getMonthAriaLabel(DEFAULT_CALENDAR_CONTEXT.month, DEFAULT_CALENDAR_CONTEXT.year);
+  
   root.innerHTML = `
     <section class="panel-layout" aria-label="Panel de control M+">
       <header class="panel-layout__top-header">
@@ -2646,7 +2731,7 @@ function renderMonthBlockGrid(root) {
       <div class="panel-layout__month-strip" aria-label="Selector de mes">
         <div class="panel-layout__month-strip-inner">
           <div class="panel-layout__month-title">${monthTitle}</div>
-          <div class="panel-layout__month-nav" aria-hidden="true">
+          <div class="panel-layout__month-nav">
             <span class="panel-layout__month-nav-arrow">‹</span>
             <span class="panel-layout__month-nav-arrow">›</span>
           </div>
@@ -2691,6 +2776,7 @@ function renderMonthBlockGrid(root) {
   }
 
   renderRows();
+  attachMonthNavigation(root);
 
   const gridRoot = root.querySelector(".month-block__body-grid");
   gridRoot?.addEventListener("keydown", handleGridEnterKey);
