@@ -1327,6 +1327,33 @@
       clearBlockDayFocus(root);
     }, true);
 
+root.addEventListener("mouseover", (event) => {
+      if (!activeBlockDayHover) {
+        return;
+      }
+
+      const targetElement = getEventTargetElement(event);
+      if (!targetElement) {
+        clearBlockDayFocus(root);
+        return;
+      }
+
+      const hoveredCountNode = targetElement.closest(`.${BLOCK_DAY_COUNT_CLASS}`);
+      const hoveredBlockHeaderCell = targetElement.closest("#right-body .day-row.group .day-cell");
+      const isInsideActiveHover = Boolean(
+        hoveredCountNode
+        && activeBlockDayHover.hoveredHeaderCell
+        && activeBlockDayHover.hoveredHeaderCell.contains(hoveredCountNode),
+      ) || Boolean(
+        hoveredBlockHeaderCell
+        && activeBlockDayHover.hoveredHeaderCell === hoveredBlockHeaderCell,
+      );
+
+      if (!isInsideActiveHover) {
+        clearBlockDayFocus(root);
+      }
+    }, true);
+
     root.addEventListener("mouseover", (event) => {
       const targetCell = event.target instanceof Element ? event.target.closest(`.day-cell.${RANGE_CELL_CLASS}`) : null;
       if (!targetCell) {
