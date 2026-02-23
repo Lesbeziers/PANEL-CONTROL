@@ -160,6 +160,12 @@ body {
   display: inline-block;
   min-width: 0.6em;
   text-align: center;
+  cursor: pointer;
+}
+
+.panel-layout__month-nav-arrow:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
 }
 
 .panel-layout__placeholder {
