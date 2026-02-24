@@ -336,6 +336,29 @@ function getContextRowTarget(blockIndex, rowIndex) {
   };
 }
 
+function getInsertTargetFromContext(blockIndex, rowIndex) {
+  if (
+    dragSelection
+    && Number.isInteger(dragSelection.blockIndex)
+    && dragSelection.blockIndex === blockIndex
+    && Number.isInteger(dragSelection.r1)
+    && Number.isInteger(dragSelection.r2)
+  ) {
+    const startRow = Math.min(dragSelection.r1, dragSelection.r2);
+    const endRow = Math.max(dragSelection.r1, dragSelection.r2);
+    if (rowIndex >= startRow && rowIndex <= endRow) {
+      return {
+        blockIndex,
+        startRow,
+        endRow,
+        count: endRow - startRow + 1,
+      };
+    }
+  }
+
+  return getContextRowTarget(blockIndex, rowIndex);
+}
+
 function copyRowDataInto(sourceRow, targetRow) {
   if (!sourceRow || !targetRow) {
     return targetRow;
@@ -2578,7 +2601,7 @@ function ensureContextMenuElement() {
     }
 
     if (target.dataset.action === "above") {
-      const insertTarget = getDeleteTarget(blockIndex) || getContextRowTarget(blockIndex, rowIndex);
+      const insertTarget = getInsertTargetFromContext(blockIndex, rowIndex);
       if (!insertTarget) {
         closeContextMenu();
         return;
@@ -2589,7 +2612,7 @@ function ensureContextMenuElement() {
     }
 
     if (target.dataset.action === "below") {
-      const insertTarget = getDeleteTarget(blockIndex) || getContextRowTarget(blockIndex, rowIndex);
+      const insertTarget = getInsertTargetFromContext(blockIndex, rowIndex);
       if (!insertTarget) {
         closeContextMenu();
         return;
