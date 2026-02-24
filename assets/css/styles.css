@@ -317,6 +317,20 @@ body {
   color: var(--group-text);
 }
 
+.left-row--section-separator > div,
+.day-row--section-separator .day-cell {
+  background: var(--group-bg);
+  color: #ffffff;
+}
+
+.left-row--section-separator > div {
+  font-weight: 900;
+}
+
+.left-row--section-separator .gutter {
+  pointer-events: none;
+}
+
 .left-row .gutter {
   justify-content: center;
   gap: 2px;
