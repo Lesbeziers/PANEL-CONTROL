@@ -777,17 +777,12 @@
           headerRow: dayRow,
           maxSimultaneous: extractBlockMaxSimultaneous(leftRow?.textContent || ""),
           counts: new Array(32).fill(0),
+          hasVisibleRows: false,
         };
 
-        const persistedCounts = `${dayRow.dataset.blockDailyCounts || ""}`
+        activeBlock.persistedCounts = `${dayRow.dataset.blockDailyCounts || ""}`
           .split(",")
           .map((value) => Number.parseInt(value, 10));
-        if (persistedCounts.length >= calendarContext.daysInMonth) {
-          for (let day = 1; day <= calendarContext.daysInMonth; day += 1) {
-            const persistedValue = persistedCounts[day - 1];
-            activeBlock.counts[day] = Number.isInteger(persistedValue) ? persistedValue : 0;
-          }
-        }
 
         blockEntries.push(activeBlock);
         return;
@@ -796,6 +791,8 @@
       if (!activeBlock || !isDataRow(dayRow, leftRow)) {
         return;
       }
+
+      activeBlock.hasVisibleRows = true;
 
       const visibleInterval = getVisibleDayIntervalForRow(leftRow, calendarContext);
       if (!visibleInterval) {
@@ -806,6 +803,21 @@
       const toDay = Math.min(calendarContext.daysInMonth, visibleInterval.endDay);
       for (let day = fromDay; day <= toDay; day += 1) {
         activeBlock.counts[day] += 1;
+      }
+    });
+
+    blockEntries.forEach((entry) => {
+      if (entry.hasVisibleRows) {
+        return;
+      }
+
+      if (entry.persistedCounts.length < calendarContext.daysInMonth) {
+        return;
+      }
+
+      for (let day = 1; day <= calendarContext.daysInMonth; day += 1) {
+        const persistedValue = entry.persistedCounts[day - 1];
+        entry.counts[day] = Number.isInteger(persistedValue) ? persistedValue : 0;
       }
     });
 
