@@ -778,6 +778,17 @@
           maxSimultaneous: extractBlockMaxSimultaneous(leftRow?.textContent || ""),
           counts: new Array(32).fill(0),
         };
+
+        const persistedCounts = `${dayRow.dataset.blockDailyCounts || ""}`
+          .split(",")
+          .map((value) => Number.parseInt(value, 10));
+        if (persistedCounts.length >= calendarContext.daysInMonth) {
+          for (let day = 1; day <= calendarContext.daysInMonth; day += 1) {
+            const persistedValue = persistedCounts[day - 1];
+            activeBlock.counts[day] = Number.isInteger(persistedValue) ? persistedValue : 0;
+          }
+        }
+
         blockEntries.push(activeBlock);
         return;
       }
