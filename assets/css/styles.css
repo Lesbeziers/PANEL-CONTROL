@@ -75,7 +75,7 @@
   --header-height: 38px;
   --day-width: 20px;
   --month-grid-width: calc(930px + (31 * var(--day-width)));
-  --month-body-scrollbar-space: -18px;
+  --month-body-scrollbar-space: 16px;
 }
 
 * {
@@ -199,7 +199,7 @@ body {
 }
 
 .month-block {
-  width: calc(var(--month-grid-width) + var(--month-body-scrollbar-space));
+  width: var(--month-grid-width);
   margin: 0 auto;
   flex: 1 1 auto;
   min-height: 0;
@@ -221,6 +221,9 @@ body {
 .month-block__body {
   flex: 1 1 auto;
   min-height: 0;
+  width: var(--month-grid-width);
+  margin: 0 auto;
+  box-sizing: content-box;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
