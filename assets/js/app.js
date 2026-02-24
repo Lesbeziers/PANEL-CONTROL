@@ -28,6 +28,7 @@ const MONTH_NAMES_ES = [
   "noviembre",
   "diciembre",
 ];
+const WEEKDAY_INITIALS_ES = ["L", "M", "X", "J", "V", "S", "D"];
 const now = new Date();
 const DEFAULT_CALENDAR_CONTEXT = {
   month: now.getMonth() + 1,
@@ -217,6 +218,7 @@ function applyCalendarContextToView(root = document) {
 
   dayHeaderCells.forEach((cell, index) => {
     const day = index + 1;
+    updateDayHeaderCell(cell, day, currentCalendarContext);
     cell.classList.toggle("inactive", day > currentCalendarContext.daysInMonth);
   });
 
@@ -236,6 +238,23 @@ function applyCalendarContextToView(root = document) {
 
   syncFillHandlePosition();
   syncCopyAntsPosition();
+}
+
+function getWeekdayInitial(day, calendarContext = currentCalendarContext) {
+  const weekdayIndex = new Date(calendarContext.year, calendarContext.month - 1, day).getDay();
+  return WEEKDAY_INITIALS_ES[(weekdayIndex + 6) % 7] || "";
+}
+
+function updateDayHeaderCell(cell, day, calendarContext = currentCalendarContext) {
+  if (!cell) {
+    return;
+  }
+
+  cell.setAttribute("data-day", String(day));
+  cell.innerHTML = `
+    <span class="day-cell__weekday" aria-hidden="true">${getWeekdayInitial(day, calendarContext)}</span>
+    <span class="day-cell__number">${day}</span>
+  `;
 }
 
 function shiftCalendarMonth(deltaMonths, root = document) {
@@ -3123,7 +3142,7 @@ function renderMonthBlockGrid(root) {
   for (let day = 1; day <= 31; day++) {
     const cell = document.createElement("div");
     cell.className = `day-cell ${day > calendarContext.daysInMonth ? "inactive" : ""}`;
-    cell.textContent = day;
+    updateDayHeaderCell(cell, day, calendarContext);
     dayHeader.appendChild(cell);
   }
 
