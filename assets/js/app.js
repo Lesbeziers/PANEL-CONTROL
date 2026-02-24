@@ -3214,7 +3214,6 @@ function renderRows() {
         selectedCell = leftRow.children[6];
         selectedCell.classList.add("is-selected");
       }
-      leftRow.children[6].textContent = "";
 
       leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, sourceIndex));
       dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, sourceIndex));
