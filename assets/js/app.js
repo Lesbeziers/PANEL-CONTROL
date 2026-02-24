@@ -278,7 +278,37 @@ function attachMonthNavigation(root) {
   });
 }
 
-function getDeleteTarget(preferredBlockIndex = null) {
+function getContextSelectionTarget(blockIndex, rowIndex) {
+  if (
+    dragSelection
+    && Number.isInteger(dragSelection.blockIndex)
+    && dragSelection.blockIndex === blockIndex
+    && Number.isInteger(dragSelection.r1)
+    && Number.isInteger(dragSelection.r2)
+  ) {
+    const startRow = Math.min(dragSelection.r1, dragSelection.r2);
+    const endRow = Math.max(dragSelection.r1, dragSelection.r2);
+    if (rowIndex >= startRow && rowIndex <= endRow) {
+      return {
+        blockIndex,
+        startRow,
+        endRow,
+        count: endRow - startRow + 1,
+      };
+    }
+  }
+
+  return getContextRowTarget(blockIndex, rowIndex);
+}
+
+function getDeleteTarget(preferredBlockIndex = null, preferredRowIndex = null) {
+  if (Number.isInteger(preferredBlockIndex) && Number.isInteger(preferredRowIndex)) {
+    const contextTarget = getContextSelectionTarget(preferredBlockIndex, preferredRowIndex);
+    if (contextTarget) {
+      return contextTarget;
+    }
+  }
+
   if (
     dragSelection
     && Number.isInteger(dragSelection.blockIndex)
@@ -314,12 +344,12 @@ function getDeleteTarget(preferredBlockIndex = null) {
   };
 }
 
-function canDeleteRows(preferredBlockIndex = null) {
-  return !!getDeleteTarget(preferredBlockIndex);
+function canDeleteRows(preferredBlockIndex = null, preferredRowIndex = null) {
+  return !!getDeleteTarget(preferredBlockIndex, preferredRowIndex);
 }
 
-function getDuplicateTarget(preferredBlockIndex = null) {
-  return getDeleteTarget(preferredBlockIndex);
+function getDuplicateTarget(preferredBlockIndex = null, preferredRowIndex = null) {
+  return getDeleteTarget(preferredBlockIndex, preferredRowIndex);
 }
 
 function getContextRowTarget(blockIndex, rowIndex) {
@@ -337,26 +367,7 @@ function getContextRowTarget(blockIndex, rowIndex) {
 }
 
 function getInsertTargetFromContext(blockIndex, rowIndex) {
-  if (
-    dragSelection
-    && Number.isInteger(dragSelection.blockIndex)
-    && dragSelection.blockIndex === blockIndex
-    && Number.isInteger(dragSelection.r1)
-    && Number.isInteger(dragSelection.r2)
-  ) {
-    const startRow = Math.min(dragSelection.r1, dragSelection.r2);
-    const endRow = Math.max(dragSelection.r1, dragSelection.r2);
-    if (rowIndex >= startRow && rowIndex <= endRow) {
-      return {
-        blockIndex,
-        startRow,
-        endRow,
-        count: endRow - startRow + 1,
-      };
-    }
-  }
-
-  return getContextRowTarget(blockIndex, rowIndex);
+  return getContextSelectionTarget(blockIndex, rowIndex);
 }
 
 function copyRowDataInto(sourceRow, targetRow) {
@@ -372,8 +383,8 @@ function copyRowDataInto(sourceRow, targetRow) {
   };
 }
 
-function duplicateRowsAroundSelection(direction, preferredBlockIndex = null) {
-  const duplicateTarget = getDuplicateTarget(preferredBlockIndex);
+function duplicateRowsAroundSelection(direction, preferredBlockIndex = null, preferredRowIndex = null) {
+  const duplicateTarget = getDuplicateTarget(preferredBlockIndex, preferredRowIndex);
   if (!duplicateTarget || (direction !== "above" && direction !== "below")) {
     return;
   }
@@ -2599,19 +2610,19 @@ function ensureContextMenuElement() {
     }
     
     if (target.dataset.action === "duplicate-above") {
-      duplicateRowsAroundSelection("above", blockIndex);
+      duplicateRowsAroundSelection("above", blockIndex, rowIndex);
       closeContextMenu();
       return;
     }
 
     if (target.dataset.action === "duplicate-below") {
-      duplicateRowsAroundSelection("below", blockIndex);
+      duplicateRowsAroundSelection("below", blockIndex, rowIndex);
       closeContextMenu();
       return;
     }
 
     if (target.dataset.action === "delete") {
-      const deleteTarget = getDeleteTarget(blockIndex);
+      const deleteTarget = getDeleteTarget(blockIndex, rowIndex);
       if (!deleteTarget) {
         return;
       }
@@ -2634,7 +2645,7 @@ function updateContextMenuDeleteState() {
     return;
   }
 
-  const enabled = canDeleteRows(contextMenu.blockIndex);
+  const enabled = canDeleteRows(contextMenu.blockIndex, contextMenu.rowIndex);
   deleteItem.disabled = !enabled;
   deleteItem.classList.toggle("is-disabled", !enabled);
 }
