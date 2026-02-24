@@ -91,7 +91,14 @@ function normalizeMaxSimultaneous(value) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_SIMULTANEOUS;
 }
 
-function createBlock({ id, blockType, headerColor, maxSimultaneous = DEFAULT_MAX_SIMULTANEOUS, rows = null }) {
+function createBlock({
+  id,
+  blockType,
+  headerColor,
+  maxSimultaneous = DEFAULT_MAX_SIMULTANEOUS,
+  rows = null,
+  collapsed = false,
+}) {
   const resolvedBlockType = `${blockType ?? ""}`.trim();
   const resolvedRows = Array.isArray(rows) && rows.length
     ? rows
@@ -102,6 +109,7 @@ function createBlock({ id, blockType, headerColor, maxSimultaneous = DEFAULT_MAX
     blockType: resolvedBlockType,
     headerColor,
     maxSimultaneous: normalizeMaxSimultaneous(maxSimultaneous),
+    collapsed: !!collapsed,
     rows: resolvedRows,
   };
 }
@@ -2711,7 +2719,7 @@ function openContextMenu(event, blockIndex, rowIndex) {
   document.addEventListener("keydown", handleMenuEscape);
 }
 
-function createLeftRow({ group = false, cells = [], onAddRow, onDeleteRows, canDeleteRowsInGroup = false, groupBlockIndex = null } = {}) {
+function createLeftRow({ group = false, cells = [], onToggleCollapse = null, collapsed = false } = {}) {
   const leftRow = document.createElement("div");
   leftRow.className = `left-row ${group ? "group" : ""}`;
 
@@ -2721,36 +2729,19 @@ function createLeftRow({ group = false, cells = [], onAddRow, onDeleteRows, canD
     if (i === 0) {
       cell.classList.add("gutter");
       if (group) {
-        const addBtn = document.createElement("button");
-        addBtn.className = "gutter-icon-btn";
-        addBtn.type = "button";
-        addBtn.setAttribute("aria-label", "Añadir fila");
-        addBtn.textContent = "+";
-        addBtn.addEventListener("click", () => {
-          if (typeof onAddRow === "function") {
-            onAddRow();
+        const toggleBtn = document.createElement("button");
+        toggleBtn.className = "gutter-icon-btn gutter-icon-btn--collapse";
+        toggleBtn.type = "button";
+        toggleBtn.setAttribute("aria-label", collapsed ? "Desplegar bloque" : "Plegar bloque");
+        toggleBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        toggleBtn.textContent = collapsed ? "+" : "−";
+        toggleBtn.addEventListener("click", () => {
+          if (typeof onToggleCollapse === "function") {
+            onToggleCollapse();
           }
         });
 
-        const removeBtn = document.createElement("button");
-        removeBtn.className = "gutter-icon-btn";
-        removeBtn.type = "button";
-        removeBtn.setAttribute("aria-label", "Eliminar filas");
-        removeBtn.textContent = "−";
-        removeBtn.dataset.action = "delete-rows";
-        if (groupBlockIndex !== null) {
-          removeBtn.dataset.blockIndex = String(groupBlockIndex);
-        }
-        removeBtn.disabled = !canDeleteRowsInGroup;
-        removeBtn.classList.toggle("is-disabled", !canDeleteRowsInGroup);
-        removeBtn.addEventListener("click", () => {
-          if (removeBtn.disabled || typeof onDeleteRows !== "function") {
-            return;
-          }
-          onDeleteRows(removeBtn);
-        });
-        
-        cell.append(addBtn, removeBtn);
+        cell.appendChild(toggleBtn);
       }
     } else if (group && i === 2 && cells[i] && typeof cells[i] === "object") {
       const leftText = document.createElement("span");
@@ -3186,15 +3177,10 @@ function renderRows() {
     const groupLeftRow = createLeftRow({
       group: true,
       cells: ["", "", { left: block.blockType.toUpperCase(), right: getMaxSimultaneousLabel(block.maxSimultaneous) }, "", "", "", ""],
-      onAddRow: () => insertRow(blockIndex, 0),
-      canDeleteRowsInGroup: canDeleteRows(blockIndex),
-      groupBlockIndex: blockIndex,
-      onDeleteRows: (triggerElement) => {
-        const target = getDeleteTarget(blockIndex);
-        if (!target) {
-          return;
-        }
-        openDeleteConfirmModal(target, triggerElement);
+      collapsed: !!block.collapsed,
+      onToggleCollapse: () => {
+        blocks[blockIndex] = { ...block, collapsed: !block.collapsed };
+        renderRows();
       },
     });
     const groupDayRow = createDayRow(true);
@@ -3206,6 +3192,10 @@ function renderRows() {
 
     leftBody.appendChild(groupLeftRow);
     rightBody.appendChild(groupDayRow);
+    if (block.collapsed) {
+      return;
+    }
+
     const orderedRows = getOrderedRowsForMonth(block, currentCalendarContext);
     orderedRows.forEach(({ row, sourceIndex }) => {
       const leftRow = createLeftRow();
