@@ -234,6 +234,7 @@ body {
 }
 
 .left-header > div,
+.left-header > .left-header-global-toggle,
 .right-header-track .day-cell,
 .left-row > div,
 .day-row .day-cell {
@@ -258,6 +259,7 @@ body {
 }
 
 .left-header > div,
+.left-header > .left-header-global-toggle,
 .right-header-track .day-cell {
   height: var(--header-height);
   display: flex;
@@ -270,6 +272,10 @@ body {
 }
 
 .left-header > div {
+  background: var(--header-bg);
+}
+
+.left-header > .left-header-global-toggle {
   background: var(--header-bg);
 }
 
