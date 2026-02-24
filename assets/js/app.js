@@ -1904,10 +1904,25 @@ function handleGridEnterKey(event) {
     return;
   }
 
-  if (event.key === "Escape" && copyRange) {
-    setCopyRange(null);
-    event.preventDefault();
-    return;
+  if (event.key === "Escape") {
+    let handledEscape = false;
+
+    if (copyRange) {
+      setCopyRange(null);
+      handledEscape = true;
+    }
+
+    if (selectedCell) {
+      setSelectedCell(null);
+      dragSelection = null;
+      clearDragSelectionPreview();
+      handledEscape = true;
+    }
+
+    if (handledEscape) {
+      event.preventDefault();
+      return;
+    }
   }
 
   if (event.key === "Tab") {
