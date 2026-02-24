@@ -693,11 +693,13 @@ body {
 .right-header-track .day-cell .day-cell__weekday {
   font-size: 10px;
   font-weight: 700;
+  transform: translateY(-2px);
 }
 
 .right-header-track .day-cell .day-cell__number {
   font-size: 12px;
   font-weight: 700;
+  transform: translateY(2px);
 }
 
 .right-header-track .day-cell:not(.inactive):hover {
