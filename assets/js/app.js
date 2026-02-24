@@ -120,17 +120,30 @@ function createBlock({
   };
 }
 
+function createSeparatorBlock({ id, label, color = "#bdbdbd" }) {
+  return {
+    id,
+    blockType: `${label ?? ""}`.trim(),
+    headerColor: color,
+    maxSimultaneous: null,
+    collapsed: false,
+    rows: [],
+    isSeparator: true,
+  };
+}
+
 function getMaxSimultaneousLabel(maxSimultaneous) {
   const normalizedMax = normalizeMaxSimultaneous(maxSimultaneous);
   return Number.isInteger(normalizedMax) ? `(Máx. ${normalizedMax} simultáneas)` : "";
 }
 
 function areAllBlocksCollapsed() {
-  return blocks.length > 0 && blocks.every((block) => block.collapsed);
+  const collapsibleBlocks = blocks.filter((block) => !block.isSeparator);
+  return collapsibleBlocks.length > 0 && collapsibleBlocks.every((block) => block.collapsed);
 }
 
 function setAllBlocksCollapsed(collapsed) {
-  blocks = blocks.map((block) => ({ ...block, collapsed }));
+  blocks = blocks.map((block) => (block.isSeparator ? block : { ...block, collapsed }));
 }
 
 function updateGlobalCollapseButtonState() {
@@ -160,6 +173,7 @@ let blocks = [
   createBlock({ id: "block-12", blockType: "pasos a Publi", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
   createBlock({ id: "block-13", blockType: "Intruso", headerColor: "#8fb596", maxSimultaneous: 10 }),
   createBlock({ id: "block-14", blockType: "Loop protección Pop-Ups", headerColor: "#8fb596", maxSimultaneous: null }),
+  createSeparatorBlock({ id: "separator-1", label: "OTROS CANALES" }),
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
@@ -2772,7 +2786,7 @@ function openContextMenu(event, blockIndex, rowIndex) {
   document.addEventListener("keydown", handleMenuEscape);
 }
 
-function createLeftRow({ group = false, cells = [], onToggleCollapse = null, collapsed = false } = {}) {
+function createLeftRow({ group = false, cells = [], onToggleCollapse = null, collapsed = false, showToggle = group } = {}) {
   const leftRow = document.createElement("div");
   leftRow.className = `left-row ${group ? "group" : ""}`;
 
@@ -2781,7 +2795,7 @@ function createLeftRow({ group = false, cells = [], onToggleCollapse = null, col
 
     if (i === 0) {
       cell.classList.add("gutter");
-      if (group) {
+      if (group && showToggle) {
         const toggleBtn = document.createElement("button");
         toggleBtn.className = "gutter-icon-btn gutter-icon-btn--collapse";
         toggleBtn.type = "button";
@@ -3172,7 +3186,6 @@ function renderMonthBlockGrid(root) {
         </div>
       </section>
 
-      <div class="panel-layout__section-separator" aria-hidden="true">OTROS CANALES</div>
     </section>
   `;
 
@@ -3242,6 +3255,25 @@ function renderRows() {
   renderDragSelectionPreview(dragSelection);
   
   blocks.forEach((block, blockIndex) => {
+    if (block.isSeparator) {
+      const separatorLeftRow = createLeftRow({
+        group: true,
+        showToggle: false,
+        cells: ["", "", { left: block.blockType.toUpperCase(), right: "" }, "", "", "", ""],
+      });
+      const separatorDayRow = createDayRow(true);
+      separatorLeftRow.classList.add("left-row--section-separator");
+      separatorDayRow.classList.add("day-row--section-separator");
+      if (block.headerColor) {
+        separatorLeftRow.style.setProperty("--group-bg", block.headerColor);
+        separatorDayRow.style.setProperty("--group-bg", block.headerColor);
+      }
+
+      leftBody.appendChild(separatorLeftRow);
+      rightBody.appendChild(separatorDayRow);
+      return;
+    }
+
     const groupLeftRow = createLeftRow({
       group: true,
       cells: ["", "", { left: block.blockType.toUpperCase(), right: getMaxSimultaneousLabel(block.maxSimultaneous) }, "", "", "", ""],
