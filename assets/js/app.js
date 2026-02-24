@@ -89,6 +89,10 @@ function newRowForBlock(blockType, homeContext = DEFAULT_CALENDAR_CONTEXT) {
 }
 
 function normalizeMaxSimultaneous(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_SIMULTANEOUS;
 }
@@ -117,7 +121,8 @@ function createBlock({
 }
 
 function getMaxSimultaneousLabel(maxSimultaneous) {
-  return `(Máx. ${normalizeMaxSimultaneous(maxSimultaneous)} simultáneas)`;
+  const normalizedMax = normalizeMaxSimultaneous(maxSimultaneous);
+  return Number.isInteger(normalizedMax) ? `(Máx. ${normalizedMax} simultáneas)` : "";
 }
 
 function areAllBlocksCollapsed() {
@@ -154,6 +159,7 @@ let blocks = [
   createBlock({ id: "block-11", blockType: "Pasos a Publi", headerColor: "#8fb596", maxSimultaneous: 5 }),
   createBlock({ id: "block-12", blockType: "pasos a Publi", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
   createBlock({ id: "block-13", blockType: "Intruso", headerColor: "#8fb596", maxSimultaneous: 10 }),
+  createBlock({ id: "block-14", blockType: "Loop protección Pop-Ups", headerColor: "#8fb596", maxSimultaneous: null }),
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
