@@ -366,7 +366,7 @@ body {
 .left-row--section-separator,
 .day-row--section-separator {
   position: relative;
-  z-index: 10;
+  z-index: 13000;
 }
 
 .left-row--section-separator {
@@ -388,23 +388,35 @@ body {
 }
 
 .left-row--section-separator::after {
-  content: attr(data-separator-label);
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1;
-  text-transform: uppercase;
-  pointer-events: none;
-  z-index: 1;
+  content: "";
 }
 
 .left-row--section-separator .gutter {
   pointer-events: none;
+}
+
+.day-row--section-separator {
+  position: relative;
+  z-index: 13000;
+}
+
+.day-row--section-separator::after {
+  content: attr(data-separator-label);
+  position: absolute;
+  left: -930px;
+  top: 0;
+  width: var(--month-grid-width);
+  height: var(--row-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .day-row--section-separator .day-cell.inactive {
