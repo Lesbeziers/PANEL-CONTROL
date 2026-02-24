@@ -1,3 +1,4 @@
+
 const columns = [
   { key: "listo", label: "LISTO", type: "checkbox" },
   { key: "title", label: "TÍTULO", type: "text" },
@@ -2198,29 +2199,29 @@ function handleGridPaste(event) {
     return;
   }
 
-  let pasteStartRowIndex = startMeta.rowIndex;
-  let maxPasteRows = 1;
-
   if (clipboardRows.length > 1) {
-    const rowsToInsert = Math.min(clipboardRows.length, MAX_AUTO_INSERT);
-    if (rowsToInsert <= 0) {
-      return;
-    }
+    const availableRows = Math.max(0, block.rows.length - startMeta.rowIndex);
+    const missingRows = Math.max(0, clipboardRows.length - availableRows);
+    const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
+    if (rowsToInsert > 0) {
+      insertRows(startMeta.blockIndex, block.rows.length, rowsToInsert);
 
-    insertRows(startMeta.blockIndex, startMeta.rowIndex + 1, rowsToInsert);
-
-    if (clipboardRows.length > MAX_AUTO_INSERT) {
-      showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
+      if (missingRows > MAX_AUTO_INSERT) {
+        showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
+      }
     }
-    
-    pasteStartRowIndex = startMeta.rowIndex + 1;
-    maxPasteRows = rowsToInsert;
   }
+
+  const currentBlock = blocks[startMeta.blockIndex];
+  const availableRowsAfterInsert = Math.max(0, (currentBlock?.rows?.length || 0) - startMeta.rowIndex);
+  const maxPasteRows = clipboardRows.length > 1
+    ? Math.min(clipboardRows.length, availableRowsAfterInsert)
+    : 1;
 
   for (let offset = 0; offset < maxPasteRows; offset += 1) {
     const line = clipboardRows[offset];
     const targetCell = document.querySelector(
-      `[data-block-index="${startMeta.blockIndex}"][data-row-index="${pasteStartRowIndex + offset}"][data-column-key="${startMeta.columnKey}"]`
+      `[data-block-index="${startMeta.blockIndex}"][data-row-index="${startMeta.rowIndex + offset}"][data-column-key="${startMeta.columnKey}"]`
     );
     if (targetCell) {
       setCellValue(targetCell, line);
@@ -2229,7 +2230,7 @@ function handleGridPaste(event) {
 
   if (DATE_COLUMNS.has(startMeta.columnKey)) {
     const finalCell = document.querySelector(
-      `[data-block-index="${startMeta.blockIndex}"][data-row-index="${Math.min(pasteStartRowIndex + maxPasteRows - 1, blocks[startMeta.blockIndex].rows.length - 1)}"][data-column-key="${startMeta.columnKey}"]`
+      `[data-block-index="${startMeta.blockIndex}"][data-row-index="${Math.min(startMeta.rowIndex + maxPasteRows - 1, blocks[startMeta.blockIndex].rows.length - 1)}"][data-column-key="${startMeta.columnKey}"]`
     );
     if (finalCell) {
       setSelectedCell(finalCell);
