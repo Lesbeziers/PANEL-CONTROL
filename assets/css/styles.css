@@ -75,7 +75,7 @@
   --header-height: 38px;
   --day-width: 20px;
   --month-grid-width: calc(930px + (31 * var(--day-width)));
-  --month-body-scrollbar-space: 14px;
+  --month-body-scrollbar-space: 0px;
 }
 
 * {
