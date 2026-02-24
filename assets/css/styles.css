@@ -315,7 +315,7 @@ body {
   background: transparent;
   border: none;
   padding: 0 6px;
-  font-size: 15px;
+  font-size: 20px;
   line-height: 1;
   font-weight: 700;
   cursor: pointer;
@@ -333,7 +333,7 @@ body {
 
 
 .gutter-icon-btn--collapse {
-  font-size: 28px;
+  font-size: 20px;
   line-height: 1;
   font-weight: 900;
   min-width: 28px;
