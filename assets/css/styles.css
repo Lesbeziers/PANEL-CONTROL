@@ -231,7 +231,7 @@ body {
   justify-content: center;
   background: var(--group-bg, #bdbdbd);
   color: #fff;
-  font-size: 36px;
+  font-size: 14px;
   font-weight: 900;
   line-height: 1;
   text-transform: uppercase;
@@ -749,7 +749,7 @@ body {
 
 .right-header-scroll,
 .right-body-scroll {
-  overflow-x: hidden;
+  overflow: visible;
   background: #ffffff;
 }
 
