@@ -223,6 +223,21 @@ body {
   grid-template-columns: 930px calc(31 * var(--day-width));
 }
 
+.grid-section-separator {
+  grid-column: 1 / -1;
+  height: var(--row-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--group-bg, #bdbdbd);
+  color: #fff;
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--grid-border);
+}
+
 .title-edit-overlay-layer {
   position: absolute;
   inset: 0;
