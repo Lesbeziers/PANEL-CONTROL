@@ -322,6 +322,20 @@ function getDuplicateTarget(preferredBlockIndex = null) {
   return getDeleteTarget(preferredBlockIndex);
 }
 
+function getContextRowTarget(blockIndex, rowIndex) {
+  const block = blocks[blockIndex];
+  if (!block?.rows?.length || !Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= block.rows.length) {
+    return null;
+  }
+
+  return {
+    blockIndex,
+    startRow: rowIndex,
+    endRow: rowIndex,
+    count: 1,
+  };
+}
+
 function copyRowDataInto(sourceRow, targetRow) {
   if (!sourceRow || !targetRow) {
     return targetRow;
@@ -2549,7 +2563,7 @@ function ensureContextMenuElement() {
     }
 
     if (target.dataset.action === "above") {
-      const insertTarget = getDeleteTarget(blockIndex);
+      const insertTarget = getDeleteTarget(blockIndex) || getContextRowTarget(blockIndex, rowIndex);
       if (!insertTarget) {
         closeContextMenu();
         return;
@@ -2560,7 +2574,7 @@ function ensureContextMenuElement() {
     }
 
     if (target.dataset.action === "below") {
-      const insertTarget = getDeleteTarget(blockIndex);
+      const insertTarget = getDeleteTarget(blockIndex) || getContextRowTarget(blockIndex, rowIndex);
       if (!insertTarget) {
         closeContextMenu();
         return;
