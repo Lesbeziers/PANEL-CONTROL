@@ -338,6 +338,14 @@ body {
   outline-offset: 1px;
 }
 
+
+.gutter-icon-btn--collapse {
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 900;
+  min-width: 28px;
+}
+
 .group-title-cell {
   justify-content: space-between;
   gap: 8px;
