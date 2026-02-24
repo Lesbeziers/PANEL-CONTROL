@@ -3171,6 +3171,8 @@ function renderMonthBlockGrid(root) {
           </div>
         </div>
       </section>
+
+      <div class="panel-layout__section-separator" aria-hidden="true">OTROS CANALES</div>
     </section>
   `;
 
