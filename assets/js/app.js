@@ -52,6 +52,7 @@ const MONTH_LABEL_TO_NUMBER = {
 };
 const DATE_COLUMNS = new Set(["startDate", "endDate"]);
 const DEFAULT_MAX_SIMULTANEOUS = 5;
+const GLOBAL_COLLAPSE_BUTTON_ID = "global-collapse-toggle";
 
 let rowId = 0;
 
@@ -116,6 +117,26 @@ function createBlock({
 
 function getMaxSimultaneousLabel(maxSimultaneous) {
   return `(Máx. ${normalizeMaxSimultaneous(maxSimultaneous)} simultáneas)`;
+}
+
+function areAllBlocksCollapsed() {
+  return blocks.length > 0 && blocks.every((block) => block.collapsed);
+}
+
+function setAllBlocksCollapsed(collapsed) {
+  blocks = blocks.map((block) => ({ ...block, collapsed }));
+}
+
+function updateGlobalCollapseButtonState() {
+  const button = document.getElementById(GLOBAL_COLLAPSE_BUTTON_ID);
+  if (!button) {
+    return;
+  }
+
+  const allCollapsed = areAllBlocksCollapsed();
+  button.textContent = allCollapsed ? "+" : "−";
+  button.setAttribute("aria-expanded", allCollapsed ? "false" : "true");
+  button.setAttribute("aria-label", allCollapsed ? "Desplegar todos los bloques" : "Plegar todos los bloques");
 }
 
 let blocks = [
@@ -246,6 +267,7 @@ function applyCalendarContextToView(root = document) {
 
   syncFillHandlePosition();
   syncCopyAntsPosition();
+  updateGlobalCollapseButtonState();
 }
 
 function getWeekdayInitial(day, calendarContext = currentCalendarContext) {
@@ -3147,12 +3169,29 @@ function renderMonthBlockGrid(root) {
   `;
 
   const leftHeader = root.querySelector("#left-header");
+  const globalCollapseCell = document.createElement("div");
+  globalCollapseCell.className = "gutter gutter--global-toggle";
+
+  const globalCollapseButton = document.createElement("button");
+  globalCollapseButton.id = GLOBAL_COLLAPSE_BUTTON_ID;
+  globalCollapseButton.className = "gutter-icon-btn gutter-icon-btn--collapse";
+  globalCollapseButton.type = "button";
+  globalCollapseButton.addEventListener("click", () => {
+    const allCollapsed = areAllBlocksCollapsed();
+    setAllBlocksCollapsed(!allCollapsed);
+    renderRows();
+  });
+
+  globalCollapseCell.appendChild(globalCollapseButton);
+  leftHeader.appendChild(globalCollapseCell);
+
   headers.forEach((label) => {
     const cell = document.createElement("div");
     cell.textContent = label;
     leftHeader.appendChild(cell);
   });
-
+  updateGlobalCollapseButtonState();
+  
   const calendarContext = updateCalendarContext(root);
   const dayHeader = root.querySelector("#right-header-track");
   for (let day = 1; day <= 31; day++) {
@@ -3302,6 +3341,7 @@ function renderRows() {
 
   syncFillHandlePosition();
   syncCopyAntsPosition();
+  updateGlobalCollapseButtonState();
 }
 
 renderMonthBlockGrid(document.getElementById("app"));
