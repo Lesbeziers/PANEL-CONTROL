@@ -330,6 +330,10 @@ body {
   z-index: 10;
 }
 
+.left-row--section-separator {
+  overflow: hidden;
+}
+
 .left-row--section-separator > div,
 .day-row--section-separator .day-cell {
   border-right: none;
@@ -344,8 +348,29 @@ body {
   font-weight: 900;
 }
 
+.left-row--section-separator::after {
+  content: attr(data-separator-label);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 1;
+}
+
 .left-row--section-separator .gutter {
   pointer-events: none;
+}
+
+.day-row--section-separator .day-cell.inactive {
+  background: var(--group-bg);
+  color: #ffffff;
 }
 
 .left-row .gutter {
@@ -911,7 +936,7 @@ body {
 
 @media (max-width: 1200px) {
   .panel-layout__month-title {
-    font-size: 32px;
+    font-size: 18px;
   }
 
   .panel-layout__month-nav {
