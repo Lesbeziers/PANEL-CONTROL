@@ -215,6 +215,7 @@ body {
 
 .month-block__body-grid {
   position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: 930px calc(31 * var(--day-width));
 }
@@ -321,6 +322,22 @@ body {
 .day-row--section-separator .day-cell {
   background: var(--group-bg);
   color: #ffffff;
+}
+
+.left-row--section-separator,
+.day-row--section-separator {
+  position: relative;
+  z-index: 10;
+}
+
+.left-row--section-separator > div,
+.day-row--section-separator .day-cell {
+  border-right: none;
+  border-bottom: none;
+}
+
+.left-row--section-separator > div:last-child {
+  border-right: none;
 }
 
 .left-row--section-separator > div {
