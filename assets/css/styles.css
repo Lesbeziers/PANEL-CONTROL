@@ -224,7 +224,7 @@ body {
 }
 
 .left-header {
-  grid-template-columns: 64px 432px 82px 82px 140px 84px;
+  grid-template-columns: 46px 64px 432px 82px 82px 140px 84px;
   padding-left: 46px;
   position: relative;
 }
@@ -263,6 +263,10 @@ body {
   border-bottom: 1px solid var(--grid-border);
   font-size: 12px;
   background: #ffffff;
+}
+.left-header > .gutter--global-toggle {
+  justify-content: center;
+  padding: 0;
 }
 
 .right-header-track .day-cell:last-child,
