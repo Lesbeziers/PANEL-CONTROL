@@ -94,6 +94,7 @@ body {
 }
 
 .panel-layout {
+  height: 100vh;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -199,6 +200,10 @@ body {
 .month-block {
   width: var(--month-grid-width);
   margin: 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: #ffffff;
 }
 
@@ -211,15 +216,16 @@ body {
 }
 
 .month-block__body {
-  overflow-y: visible;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
   background: #ffffff;
 }
 
 .month-block__body-scroll-wrapper {
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
+  overflow: visible;
 }
 
 .month-block__body-grid {
