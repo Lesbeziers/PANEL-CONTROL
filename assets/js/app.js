@@ -3247,31 +3247,25 @@ function renderRows() {
   validateAllRowsDateRanges();
   const leftBody = document.getElementById("left-body");
   const rightBody = document.getElementById("right-body");
-
+  const gridRoot = document.querySelector(".month-block__body-grid");
+  
   leftBody.innerHTML = "";
   rightBody.innerHTML = "";
+  gridRoot?.querySelectorAll(".grid-section-separator").forEach((separator) => separator.remove());
   selectedCell = null;
   clearFillPreview();
   renderDragSelectionPreview(dragSelection);
   
   blocks.forEach((block, blockIndex) => {
     if (block.isSeparator) {
-      const separatorLeftRow = createLeftRow({
-        group: true,
-        showToggle: false,
-        cells: ["", "", "", "", "", "", ""],
-      });
-      const separatorDayRow = createDayRow(true);
-      separatorLeftRow.classList.add("left-row--section-separator");
-      separatorDayRow.classList.add("day-row--section-separator");
-      separatorLeftRow.dataset.separatorLabel = block.blockType.toUpperCase();
+      const separatorRow = document.createElement("div");
+      separatorRow.className = "grid-section-separator";
+      separatorRow.textContent = block.blockType.toUpperCase();
       if (block.headerColor) {
-        separatorLeftRow.style.setProperty("--group-bg", block.headerColor);
-        separatorDayRow.style.setProperty("--group-bg", block.headerColor);
+        separatorRow.style.setProperty("--group-bg", block.headerColor);
       }
 
-      leftBody.appendChild(separatorLeftRow);
-      rightBody.appendChild(separatorDayRow);
+      gridRoot?.appendChild(separatorRow);
       return;
     }
 
