@@ -177,7 +177,8 @@ body {
 
 .panel-layout__section-separator {
   flex: 0 0 auto;
-  width: 100%;
+  width: min(var(--month-grid-width), 100%);
+  margin: 0 auto;
   height: var(--header-height);
   display: flex;
   align-items: center;
