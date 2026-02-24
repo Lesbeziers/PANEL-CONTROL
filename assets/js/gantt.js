@@ -57,6 +57,7 @@
   let focusTooltip = null;
   let hoverFocusTimerId = null;
   let pendingHoverFocusRow = null;
+  let isRangePressActive = false;
   let headerHoverTimerId = null;
   let pendingHeaderHoverDay = null;
   let activeHeaderHoverDay = null;
@@ -1266,6 +1267,14 @@
       return null;
     };
 
+    const getRangeCellFromEvent = (event) => {
+      if (!(event.target instanceof Element)) {
+        return null;
+      }
+
+      return event.target.closest(`.day-cell.${RANGE_CELL_CLASS}`);
+    };
+
     root.addEventListener("mouseover", (event) => {
       const targetElement = getEventTargetElement(event);
       const blockDayCountNode = targetElement?.closest(`.${BLOCK_DAY_COUNT_CLASS}`) || null;
@@ -1327,7 +1336,7 @@
       clearBlockDayFocus(root);
     }, true);
 
-root.addEventListener("mouseover", (event) => {
+    root.addEventListener("mouseover", (event) => {
       if (!activeBlockDayHover) {
         return;
       }
@@ -1354,11 +1363,17 @@ root.addEventListener("mouseover", (event) => {
       }
     }, true);
 
-    root.addEventListener("mouseover", (event) => {
-      const targetCell = event.target instanceof Element ? event.target.closest(`.day-cell.${RANGE_CELL_CLASS}`) : null;
+    root.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      const targetCell = getRangeCellFromEvent(event);
       if (!targetCell) {
         return;
       }
+
+      isRangePressActive = true;
 
       clearBlockDayFocus(root);
 
@@ -1375,30 +1390,40 @@ root.addEventListener("mouseover", (event) => {
         window.clearTimeout(hoverFocusTimerId);
       }
 
-      pendingHoverFocusRow = dayRow;
-      hoverFocusTimerId = window.setTimeout(() => {
-        hoverFocusTimerId = null;
-        const rowToFocus = pendingHoverFocusRow;
-        pendingHoverFocusRow = null;
-        if (!rowToFocus || !root.contains(rowToFocus)) {
-          return;
-        }
-        applyBlockFocus(root, rowToFocus);
-      }, BAR_HOVER_FOCUS_DELAY_MS);
+      pendingHoverFocusRow = null;
+      applyBlockFocus(root, dayRow);
     }, true);
 
-    root.addEventListener("mouseout", (event) => {
-      if (!activeFocusRow) {
+    root.addEventListener("mouseover", (event) => {
+      if (!isRangePressActive) {
         return;
       }
 
-      const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
-      if (related?.closest?.(`.day-row.${FOCUS_ACTIVE_CLASS}, .${TOOLTIP_CLASS}`)) {
+      const targetCell = getRangeCellFromEvent(event);
+      if (!targetCell) {
         return;
       }
 
+      const dayRow = targetCell.closest(".day-row");
+      if (!dayRow || dayRow.classList.contains("group") || activeFocusRow === dayRow) {
+        return;
+      }
+
+      applyBlockFocus(root, dayRow);
+    }, true);
+
+    const handleRangePressRelease = () => {
+      if (!isRangePressActive) {
+        return;
+      }
+
+      isRangePressActive = false;
       clearBlockFocus(root);
-    }, true);
+    };
+
+    root.addEventListener("mouseup", handleRangePressRelease, true);
+    window.addEventListener("mouseup", handleRangePressRelease, true);
+    root.addEventListener("mouseleave", handleRangePressRelease, true);
 
     root.addEventListener("mouseover", (event) => {
       const headerCell = event.target instanceof Element ? event.target.closest("#right-header-track .day-cell") : null;
