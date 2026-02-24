@@ -385,40 +385,16 @@ function duplicateRowsAroundSelection(direction, preferredBlockIndex = null) {
   }
 
   const nextRows = [...block.rows];
-  let sourceStart = startRow;
-  let sourceEnd = endRow;
+  const sourceRows = nextRows.slice(startRow, endRow + 1).map((row) => ({ ...row }));
 
-  if (direction === "above") {
-    const missingAbove = Math.max(0, count - sourceStart);
-    if (missingAbove > 0) {
-      const rowsToInsert = Array.from({ length: missingAbove }, () => newRowForBlock(block.blockType, currentCalendarContext));
-      nextRows.splice(0, 0, ...rowsToInsert);
-      sourceStart += missingAbove;
-      sourceEnd += missingAbove;
-    }
+  const targetStart = direction === "above" ? startRow : endRow + 1;
+  const rowsToInsert = Array.from({ length: count }, () => newRowForBlock(block.blockType, currentCalendarContext));
+  nextRows.splice(targetStart, 0, ...rowsToInsert);
 
-    const sourceRows = nextRows.slice(sourceStart, sourceEnd + 1).map((row) => ({ ...row }));
-    const targetStart = sourceStart - count;
-    sourceRows.forEach((sourceRow, offset) => {
-      const targetIndex = targetStart + offset;
-      nextRows[targetIndex] = copyRowDataInto(sourceRow, nextRows[targetIndex]);
-    });
-  }
-
-  if (direction === "below") {
-    const missingBelow = Math.max(0, sourceEnd + count - (nextRows.length - 1));
-    if (missingBelow > 0) {
-      const rowsToInsert = Array.from({ length: missingBelow }, () => newRowForBlock(block.blockType, currentCalendarContext));
-      nextRows.splice(nextRows.length, 0, ...rowsToInsert);
-    }
-
-    const sourceRows = nextRows.slice(sourceStart, sourceEnd + 1).map((row) => ({ ...row }));
-    const targetStart = sourceEnd + 1;
-    sourceRows.forEach((sourceRow, offset) => {
-      const targetIndex = targetStart + offset;
-      nextRows[targetIndex] = copyRowDataInto(sourceRow, nextRows[targetIndex]);
-    });
-  }
+  sourceRows.forEach((sourceRow, offset) => {
+    const targetIndex = targetStart + offset;
+    nextRows[targetIndex] = copyRowDataInto(sourceRow, nextRows[targetIndex]);
+  });
 
   blocks[blockIndex] = { ...block, rows: nextRows };
   renderRows();
