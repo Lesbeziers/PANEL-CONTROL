@@ -216,6 +216,12 @@ body {
   background: #ffffff;
 }
 
+.month-block__body-scroll-wrapper {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
 .month-block__body-grid {
   position: relative;
   isolation: isolate;
@@ -756,6 +762,10 @@ body {
 .right-header-scroll {
   overflow-y: hidden;
   background: var(--header-bg);
+}
+
+.right-body-scroll {
+  overflow: visible;
 }
 
 .right-header-track,
