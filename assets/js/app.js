@@ -174,9 +174,6 @@ let blocks = [
   createBlock({ id: "block-13", blockType: "Intruso", headerColor: "#8fb596", maxSimultaneous: 10 }),
   createBlock({ id: "block-14", blockType: "Loop protección Pop-Ups", headerColor: "#8fb596", maxSimultaneous: null }),
   createSeparatorBlock({ id: "separator-1", label: "OTROS CANALES" }),
-  createBlock({ id: "block-15", blockType: "Canales LaLiga", headerColor: "#e8cd8e", maxSimultaneous: null }),
-  createBlock({ id: "block-16", blockType: "Canales Golf", headerColor: "#e8cd8e", maxSimultaneous: null }),
-  createBlock({ id: "block-17", blockType: "Canales Caza y Pesca", headerColor: "#e8cd8e", maxSimultaneous: null }),
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
