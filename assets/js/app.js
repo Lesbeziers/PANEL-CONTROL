@@ -935,6 +935,31 @@ function getOrderedRowsForMonth(block, calendarContext) {
   }];
 }
 
+function getBlockDailyCounts(block, calendarContext) {
+  const counts = new Array(32).fill(0);
+  const orderedRows = getOrderedRowsForMonth(block, calendarContext);
+  const monthStart = new Date(calendarContext.year, calendarContext.month - 1, 1);
+  const monthEnd = new Date(calendarContext.year, calendarContext.month, 0);
+
+  orderedRows.forEach(({ rowRange }) => {
+    if (!rowRange) {
+      return;
+    }
+
+    const visibleStart = rowRange.startDate < monthStart ? monthStart : rowRange.startDate;
+    const visibleEnd = rowRange.endDate > monthEnd ? monthEnd : rowRange.endDate;
+    if (visibleEnd < visibleStart) {
+      return;
+    }
+
+    for (let day = visibleStart.getDate(); day <= visibleEnd.getDate(); day += 1) {
+      counts[day] += 1;
+    }
+  });
+
+  return counts;
+}
+
 function parseDateInput(
   text,
   defaultMonth = currentCalendarContext.month,
@@ -3192,6 +3217,10 @@ function renderRows() {
 
     leftBody.appendChild(groupLeftRow);
     rightBody.appendChild(groupDayRow);
+
+    const blockDailyCounts = getBlockDailyCounts(block, currentCalendarContext);
+    groupDayRow.dataset.blockDailyCounts = blockDailyCounts.slice(1).join(",");
+
     if (block.collapsed) {
       return;
     }
