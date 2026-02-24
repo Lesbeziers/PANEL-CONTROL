@@ -3256,21 +3256,27 @@ function renderRows() {
   
   leftBody.innerHTML = "";
   rightBody.innerHTML = "";
-  gridRoot?.querySelectorAll(".grid-section-separator").forEach((separator) => separator.remove());
   selectedCell = null;
   clearFillPreview();
   renderDragSelectionPreview(dragSelection);
   
   blocks.forEach((block, blockIndex) => {
     if (block.isSeparator) {
-      const separatorRow = document.createElement("div");
-      separatorRow.className = "grid-section-separator";
-      separatorRow.textContent = block.blockType.toUpperCase();
+      const separatorLeftRow = createLeftRow({ group: true, showToggle: false });
+      const separatorDayRow = createDayRow();
+
+      separatorLeftRow.classList.add("left-row--section-separator");
+      separatorDayRow.classList.add("day-row--section-separator");
+      separatorLeftRow.dataset.separatorLabel = block.blockType.toUpperCase();
+      separatorDayRow.dataset.separatorLabel = block.blockType.toUpperCase();
+      
       if (block.headerColor) {
-        separatorRow.style.setProperty("--group-bg", block.headerColor);
+        separatorLeftRow.style.setProperty("--group-bg", block.headerColor);
+        separatorDayRow.style.setProperty("--group-bg", block.headerColor);
       }
 
-      gridRoot?.appendChild(separatorRow);
+      leftBody.appendChild(separatorLeftRow);
+      rightBody.appendChild(separatorDayRow);
       return;
     }
 
