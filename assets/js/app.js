@@ -3259,11 +3259,12 @@ function renderRows() {
       const separatorLeftRow = createLeftRow({
         group: true,
         showToggle: false,
-        cells: ["", "", { left: block.blockType.toUpperCase(), right: "" }, "", "", "", ""],
+        cells: ["", "", "", "", "", "", ""],
       });
       const separatorDayRow = createDayRow(true);
       separatorLeftRow.classList.add("left-row--section-separator");
       separatorDayRow.classList.add("day-row--section-separator");
+      separatorLeftRow.dataset.separatorLabel = block.blockType.toUpperCase();
       if (block.headerColor) {
         separatorLeftRow.style.setProperty("--group-bg", block.headerColor);
         separatorDayRow.style.setProperty("--group-bg", block.headerColor);
