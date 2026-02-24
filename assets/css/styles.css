@@ -264,9 +264,18 @@ body {
   font-size: 12px;
   background: #ffffff;
 }
-.left-header > .gutter--global-toggle {
+.left-header-global-toggle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 46px;
+  height: var(--header-height);
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
   padding: 0;
+  color: var(--header-text);
+  z-index: 1;
 }
 
 .right-header-track .day-cell:last-child,
