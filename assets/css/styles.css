@@ -75,6 +75,7 @@
   --header-height: 38px;
   --day-width: 20px;
   --month-grid-width: calc(930px + (31 * var(--day-width)));
+  --month-body-scrollbar-space: 14px;
 }
 
 * {
@@ -198,7 +199,7 @@ body {
 }
 
 .month-block {
-  width: var(--month-grid-width);
+  width: calc(var(--month-grid-width) + var(--month-body-scrollbar-space));
   margin: 0 auto;
   flex: 1 1 auto;
   min-height: 0;
@@ -209,6 +210,8 @@ body {
 
 .month-block__header {
   flex: 0 0 auto;
+  width: var(--month-grid-width);
+  margin: 0 auto;
   display: grid;
   grid-template-columns: 930px calc(31 * var(--day-width));
   background: var(--header-bg);
@@ -221,10 +224,13 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
+  padding-right: var(--month-body-scrollbar-space);
   background: #ffffff;
 }
 
 .month-block__body-scroll-wrapper {
+  width: var(--month-grid-width);
+  margin: 0 auto;
   overflow: visible;
 }
 
