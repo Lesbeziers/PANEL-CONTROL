@@ -3177,10 +3177,12 @@ function renderMonthBlockGrid(root) {
           </div>
         </header>
         <div class="month-block__body">
-          <div class="month-block__body-grid" tabindex="0" aria-label="Grid de planificación">
-            <div class="left-grid" id="left-body"></div>
-            <div class="right-body-scroll" id="right-body-scroll">
-              <div id="right-body"></div>
+          <div class="month-block__body-scroll-wrapper">
+            <div class="month-block__body-grid" tabindex="0" aria-label="Grid de planificación">
+              <div class="left-grid" id="left-body"></div>
+              <div class="right-body-scroll" id="right-body-scroll">
+                <div id="right-body"></div>
+              </div>
             </div>
           </div>
         </div>
