@@ -3169,12 +3169,9 @@ function renderMonthBlockGrid(root) {
   `;
 
   const leftHeader = root.querySelector("#left-header");
-  const globalCollapseCell = document.createElement("div");
-  globalCollapseCell.className = "gutter gutter--global-toggle";
-
   const globalCollapseButton = document.createElement("button");
   globalCollapseButton.id = GLOBAL_COLLAPSE_BUTTON_ID;
-  globalCollapseButton.className = "gutter-icon-btn gutter-icon-btn--collapse";
+  globalCollapseButton.className = "left-header-global-toggle gutter-icon-btn gutter-icon-btn--collapse";
   globalCollapseButton.type = "button";
   globalCollapseButton.addEventListener("click", () => {
     const allCollapsed = areAllBlocksCollapsed();
@@ -3182,8 +3179,7 @@ function renderMonthBlockGrid(root) {
     renderRows();
   });
 
-  globalCollapseCell.appendChild(globalCollapseButton);
-  leftHeader.appendChild(globalCollapseCell);
+  leftHeader.appendChild(globalCollapseButton);
 
   headers.forEach((label) => {
     const cell = document.createElement("div");
