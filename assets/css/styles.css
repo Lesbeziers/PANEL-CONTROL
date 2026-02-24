@@ -119,15 +119,16 @@ body {
 .panel-layout__month-strip {
   flex: 0 0 auto;
   min-height: 35.2px;
-  padding: 6.4px 24px;
+  width: var(--month-grid-width);
+  margin: 0 auto;
+  padding: 6.4px 0;
   display: flex;
   justify-content: center;
   background: #333333;
-  color: #ffffff;
 }
 
 .panel-layout__month-strip-inner {
-  width: min(var(--month-grid-width), 100%);
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -140,9 +141,12 @@ body {
   line-height: 1;
   letter-spacing: 0.5px;
   text-transform: uppercase;
+  color: #ffffff;
+  text-align: center;
 }
 
 .panel-layout__month-nav {
+  color: #ffffff;
   position: absolute;
   right: 0;
   top: 50%;
@@ -193,8 +197,7 @@ body {
 }
 
 .month-block {
-  width: fit-content;
-  max-width: 100%;
+  width: var(--month-grid-width);
   margin: 0 auto;
   background: #ffffff;
 }
@@ -940,6 +943,7 @@ body {
   }
 
   .panel-layout__month-nav {
+    color: #ffffff;
     font-size: 46px;
     gap: 9px;
   }
