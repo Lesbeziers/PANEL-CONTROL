@@ -932,15 +932,8 @@ function getOrderedRowsForMonth(block, calendarContext) {
   });
 
   const visibleRows = indexedRows.filter((item) => item.isVisibleInCurrentMonth);
-  const hasVisibleScheduledRows = visibleRows.some((item) => !!item.rowRange);
-  const rowsWithoutPlaceholders = hasVisibleScheduledRows
-    ? visibleRows.filter((item) => !isPlaceholderRow(item.row))
-    : visibleRows;
   
-  // Mantener el orden fuente evita que los índices de fila salten durante el drag selection.
-  // El resto de interacciones (copiar/pegar, duplicar, borrar y autocompletar) dependen
-  // de que el orden visual y el índice interno de fila sean coherentes.
-  const orderedVisibleRows = rowsWithoutPlaceholders;
+  const orderedVisibleRows = visibleRows;
   if (orderedVisibleRows.length) {
     return orderedVisibleRows;
   }
