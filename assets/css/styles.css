@@ -226,6 +226,27 @@ body {
 .left-header {
   grid-template-columns: 64px 432px 82px 82px 140px 84px;
   padding-left: 46px;
+  position: relative;
+}
+
+.left-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 46px;
+  width: 1px;
+  background: var(--grid-border);
+}
+
+.left-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 46px;
+  height: 1px;
+  background: var(--grid-border);
 }
 
 .left-grid,
