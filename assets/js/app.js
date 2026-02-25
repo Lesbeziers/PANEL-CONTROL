@@ -120,7 +120,7 @@ function createBlock({
   };
 }
 
-function createSeparatorBlock({ id, label, color = "#bdbdbd" }) {
+function createSeparatorBlock({ id, label, color = "#ffffff" }) {
   return {
     id,
     blockType: `${label ?? ""}`.trim(),
