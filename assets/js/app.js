@@ -177,6 +177,7 @@ let blocks = [
   createBlock({ id: "block-15", blockType: "Canales LaLiga", headerColor: "#e8cd8e", maxSimultaneous: null }),
   createBlock({ id: "block-16", blockType: "Canales Golf", headerColor: "#e8cd8e", maxSimultaneous: null }),
   createBlock({ id: "block-17", blockType: "Canales Caza y Pesca", headerColor: "#e8cd8e", maxSimultaneous: null }),
+  createSeparatorBlock({ id: "separator-2", label: "VOD" }),
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
