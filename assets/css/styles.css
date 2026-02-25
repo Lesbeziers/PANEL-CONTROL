@@ -331,6 +331,13 @@ body {
   background: var(--header-bg);
 }
 
+.left-header > .left-header-global-toggle.gutter-icon-btn--collapse {
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 900;
+  min-width: 28px;
+}
+
 .left-header > div:last-child,
 .left-row > div:last-child {
   border-right: 2px solid var(--grid-border);
