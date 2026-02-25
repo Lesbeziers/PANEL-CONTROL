@@ -1016,57 +1016,32 @@ function parseDateInput(
   defaultYear = currentCalendarContext.year,
 ) {
   const originalText = `${text ?? ""}`;
-  const trimmed = originalText.trim();
-  if (!trimmed) {
+  const parser = window.PanelDateUtils?.parseDatePartsFromText;
+  const parsed = typeof parser === "function"
+    ? parser(originalText, { defaultMonth, defaultYear })
+    : null;
+
+  if (!parsed) {
+    const trimmed = originalText.trim();
+    if (!trimmed) {
+      return { ok: true, display: "", iso: null, error: null };
+    }
+
+    return { ok: false, display: originalText, iso: null, error: "Fecha no válida (DD/MM/YY)" };
+  }
+
+  if (parsed.ok && parsed.empty) {
     return { ok: true, display: "", iso: null, error: null };
   }
 
-  const normalizedSeparators = trimmed.replace(/[.-]/g, "/");
-  let day;
-  let month;
-  let year;
-
-  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) {
-    const [y, m, d] = trimmed.split("-").map((chunk) => Number.parseInt(chunk, 10));
-    day = d;
-    month = m;
-    year = y;
-  } else if (/^\d{6}$/.test(trimmed)) {
-    day = Number.parseInt(trimmed.slice(0, 2), 10);
-    month = Number.parseInt(trimmed.slice(2, 4), 10);
-    year = Number.parseInt(trimmed.slice(4, 6), 10) + 2000;
-  } else if (/^\d{1,2}([/.-]\d{1,2}){0,2}$/.test(trimmed)) {
-    const parts = normalizedSeparators.split("/");
-    day = Number.parseInt(parts[0], 10);
-    month = parts[1] ? Number.parseInt(parts[1], 10) : defaultMonth;
-    if (parts[2]) {
-      year = Number.parseInt(parts[2], 10);
-      if (parts[2].length === 2) {
-        year += 2000;
-      }
-    } else {
-      year = defaultYear;
-    }
-  } else if (/^\d{8}$/.test(trimmed)) {
-    day = Number.parseInt(trimmed.slice(0, 2), 10);
-    month = Number.parseInt(trimmed.slice(2, 4), 10);
-    year = Number.parseInt(trimmed.slice(4, 8), 10);
-  } else {
-    return { ok: false, display: originalText, iso: null, error: "Fecha no válida (DD/MM/YY)" };
-  }
-
-  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
-    return { ok: false, display: originalText, iso: null, error: "Fecha no válida (DD/MM/YY)" };
-  }
-
-  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(month, year)) {
-    return { ok: false, display: originalText, iso: null, error: "Fecha no válida (DD/MM/YY)" };
+  if (!parsed.ok) {
+    return { ok: false, display: originalText, iso: null, error: parsed.error || "Fecha no válida (DD/MM/YY)" };
   }
 
   return {
     ok: true,
-    display: formatDateDisplay(day, month, year),
-    iso: formatDateISO(day, month, year),
+    display: formatDateDisplay(parsed.day, parsed.month, parsed.year),
+    iso: formatDateISO(parsed.day, parsed.month, parsed.year),
     error: null,
   };
 }
