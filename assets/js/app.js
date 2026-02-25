@@ -178,6 +178,10 @@ let blocks = [
   createBlock({ id: "block-16", blockType: "Canales Golf", headerColor: "#e8cd8e", maxSimultaneous: null }),
   createBlock({ id: "block-17", blockType: "Canales Caza y Pesca", headerColor: "#e8cd8e", maxSimultaneous: null }),
   createSeparatorBlock({ id: "separator-2", label: "VOD" }),
+  createBlock({ id: "block-18", blockType: "Arranque", headerColor: "#8fb596", maxSimultaneous: 1 }),
+  createBlock({ id: "block-19", blockType: "Loop", headerColor: "#e8cd8e", maxSimultaneous: 1 }),
+  createBlock({ id: "block-20", blockType: "Pre Roll", headerColor: "#8fb596", maxSimultaneous: 5 }),
+  createBlock({ id: "block-21", blockType: "Pre Roll", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
