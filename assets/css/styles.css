@@ -189,7 +189,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #bdbdbd;
+  background: #cccccc;
   color: #ffffff;
   font-size: 18px;
   font-weight: 900;
@@ -250,7 +250,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--group-bg, #bdbdbd);
+  background: var(--group-bg, #cccccc);
   color: #fff;
   font-size: 14px;
   font-weight: 900;
@@ -370,7 +370,7 @@ body {
 }
 
 .left-row--section-separator {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .left-row--section-separator > div,
@@ -388,22 +388,9 @@ body {
 }
 
 .left-row--section-separator::after {
-  content: "";
-}
-
-.left-row--section-separator .gutter {
-  pointer-events: none;
-}
-
-.day-row--section-separator {
-  position: relative;
-  z-index: 12;
-}
-
-.day-row--section-separator::after {
   content: attr(data-separator-label);
   position: absolute;
-  left: -930px;
+  left: 0px;
   top: 0;
   width: var(--month-grid-width);
   height: var(--row-height);
@@ -418,6 +405,19 @@ body {
   text-transform: uppercase;
   pointer-events: none;
   z-index: 13;
+}
+.left-row--section-separator .gutter {
+  
+  pointer-events: none;
+}
+
+.day-row--section-separator {
+  position: relative;
+  z-index: 12;
+}
+
+.day-row--section-separator::after {
+  content: none;
 }
 
 .day-row--section-separator .day-cell,
