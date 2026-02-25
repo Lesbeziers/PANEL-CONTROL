@@ -332,7 +332,7 @@
 #left-body .left-row.ganttOutOfMonthRow > div[data-column-key="endDate"],
 #left-body .left-row.ganttOutOfMonthRow > div[data-column-key="genre"],
 #left-body .left-row.ganttOutOfMonthRow > div[data-column-key="id"] {
-  color: transparent;
+  color: rgb(from currentColor r g b / 0.45);
 }
 
 #left-body .left-row.ganttOutOfMonthRow > div[data-column-key="genre"]::before {
