@@ -318,61 +318,24 @@
   }
 
   function parseDateValue(value, calendarContext) {
-    const normalized = (value || "").trim();
-    if (!normalized) {
+    const parser = window.PanelDateUtils?.parseDatePartsFromText;
+    if (typeof parser !== "function") {
       return null;
     }
 
-    let day;
-    let month;
-    let year;
-    let hasExplicitYear = false;
+    const parsed = parser(value, {
+      defaultMonth: calendarContext?.month,
+      defaultYear: calendarContext?.year,
+    });
 
-    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) {
-      const [y, m, d] = normalized.split("-").map((part) => Number.parseInt(part, 10));
-      day = d;
-      month = m;
-      year = y;
-      hasExplicitYear = true;
-    } else if (/^\d{1,2}(?:[\/.-]\d{1,2}){1,2}$/.test(normalized)) {
-      const parts = normalized.split(/[\/.-]/);
-      day = Number.parseInt(parts[0], 10);
-      month = Number.parseInt(parts[1], 10);
-      if (parts[2]) {
-        year = Number.parseInt(parts[2], 10);
-        hasExplicitYear = true;
-        if (parts[2].length === 2) {
-          year += 2000;
-        }
-      } else {
-        year = calendarContext.year;
-      }
-    } else if (/^\d{6}$/.test(normalized)) {
-      day = Number.parseInt(normalized.slice(0, 2), 10);
-      month = Number.parseInt(normalized.slice(2, 4), 10);
-      year = Number.parseInt(normalized.slice(4, 6), 10) + 2000;
-      hasExplicitYear = true;
-    } else if (/^\d{8}$/.test(normalized)) {
-      day = Number.parseInt(normalized.slice(0, 2), 10);
-      month = Number.parseInt(normalized.slice(2, 4), 10);
-      year = Number.parseInt(normalized.slice(4, 8), 10);
-      hasExplicitYear = true;
-    } else {
-      return null;
-    }
-
-    if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
-      return null;
-    }
-
-    if (month < 1 || month > 12 || day < 1 || day > daysInMonth(month, year)) {
+    if (!parsed || !parsed.ok || parsed.empty) {
       return null;
     }
 
     return {
-      date: new Date(year, month - 1, day),
-      month,
-      hasExplicitYear,
+      date: parsed.date,
+      month: parsed.month,
+      hasExplicitYear: parsed.hasExplicitYear,
     };
   }
   
