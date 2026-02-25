@@ -505,6 +505,13 @@ body {
   box-shadow: inset 0 0 0 2px #00b050 !important;
 }
 
+.month-block__body-grid .left-row > div[data-column-key="listo"].is-selected,
+.month-block__body-grid .left-row > div[data-column-key="listo"].is-drag-selected,
+.month-block__body-grid .left-row > div[data-column-key="listo"].is-fill-preview {
+  box-shadow: none !important;
+  background: transparent;
+}
+
 .left-row > div[data-column-key].is-drag-selected {
   position: relative;
   z-index: 1;
@@ -760,6 +767,10 @@ body {
 .left-row > div.checkbox-cell {
   justify-content: center;
   padding: 0;
+}
+
+.left-row.group > div.checkbox-cell--group-toggle {
+  align-items: center;
 }
 
 .listo-checkbox {
