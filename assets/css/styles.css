@@ -397,7 +397,7 @@ body {
 
 .day-row--section-separator {
   position: relative;
-  z-index: 13000;
+  z-index: 12;
 }
 
 .day-row--section-separator::after {
@@ -411,17 +411,27 @@ body {
   align-items: center;
   justify-content: center;
   text-align: center;
-  font-size: 24px;
-  font-weight: 900;
+  font-size: 19px;
+  font-weight: 700;
+  color: #ffffff;
   line-height: 1;
   text-transform: uppercase;
   pointer-events: none;
-  z-index: 2;
+  z-index: 13;
 }
 
-.day-row--section-separator .day-cell.inactive {
-  background: var(--group-bg);
+.day-row--section-separator .day-cell,
+.day-row--section-separator .day-cell.inactive,
+.day-row--section-separator .day-cell.ganttWeekendCell {
+  background: var(--group-bg) !important;
   color: #ffffff;
+  border-right: none;
+  border-bottom: none;
+}
+
+.day-row--section-separator .day-cell::before,
+.day-row--section-separator .day-cell::after {
+  display: none !important;
 }
 
 .left-row .gutter {
