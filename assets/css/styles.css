@@ -109,7 +109,6 @@ body {
   justify-content: center;
   background: #ffffff;
   padding: 20px 16px;
-  border-bottom: 1px solid #d8d8d8;
 }
 
 .panel-layout__top-header img {
@@ -121,8 +120,8 @@ body {
 .panel-layout__month-strip {
   flex: 0 0 auto;
   min-height: 35.2px;
-  width: var(--month-grid-width);
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   padding: 6.4px 0;
   display: flex;
   justify-content: center;
@@ -130,7 +129,7 @@ body {
 }
 
 .panel-layout__month-strip-inner {
-  width: 100%;
+  width: var(--month-grid-width);
   display: flex;
   align-items: center;
   justify-content: center;
