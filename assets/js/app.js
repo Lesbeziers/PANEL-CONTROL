@@ -213,11 +213,328 @@ let genreTypeBufferTimestamp = 0;
 const GENRE_TYPE_BUFFER_TIMEOUT_MS = 700;
 const MAX_AUTO_INSERT = 50;
 const TOAST_DURATION_MS = 3200;
+const HISTORY_LIMIT = 200;
+const HISTORY_GROUP_WINDOW_MS = 650;
 let toastElement = null;
 let toastHideTimer = null;
 let deleteConfirmElement = null;
 let deleteConfirmState = null;
 let currentCalendarContext = { ...DEFAULT_CALENDAR_CONTEXT };
+let undoStack = [];
+let redoStack = [];
+let pendingHistoryAction = null;
+let pendingHistoryCommitTimer = null;
+let activeHistoryAction = null;
+let isApplyingHistory = false;
+
+
+function cloneRowData(row) {
+  return {
+    ...row,
+  };
+}
+
+function cloneRows(rows) {
+  return Array.isArray(rows) ? rows.map((row) => cloneRowData(row)) : [];
+}
+
+function getCellByMeta(meta) {
+  if (!meta) {
+    return null;
+  }
+
+  return document.querySelector(
+    `[data-block-index="${meta.blockIndex}"][data-row-index="${meta.rowIndex}"][data-column-key="${meta.columnKey}"]`
+  );
+}
+
+function getCellMetaFromRowKey(rowKey, columnKey) {
+  if (!rowKey || !columnKey) {
+    return null;
+  }
+
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+    const block = blocks[blockIndex];
+    if (!block?.rows?.length) {
+      continue;
+    }
+
+    const rowIndex = block.rows.findIndex((row) => row?.rowKey === rowKey);
+    if (rowIndex >= 0) {
+      return { blockIndex, rowIndex, columnKey };
+    }
+  }
+
+  return null;
+}
+
+function getPrimaryCellForHistory(options = {}) {
+  if (options.primaryCell) {
+    return options.primaryCell;
+  }
+
+  const meta = selectedCell ? getCellMeta(selectedCell) : null;
+  if (!meta) {
+    return null;
+  }
+
+  const row = blocks[meta.blockIndex]?.rows?.[meta.rowIndex];
+  return { ...meta, rowKey: row?.rowKey || null };
+}
+
+function createHistoryAction(type, options = {}) {
+  return {
+    type,
+    patches: [],
+    timestamp: Date.now(),
+    primaryCell: getPrimaryCellForHistory(options),
+    groupKey: options.groupKey || null,
+  };
+}
+
+function clearPendingHistoryTimer() {
+  if (pendingHistoryCommitTimer) {
+    window.clearTimeout(pendingHistoryCommitTimer);
+    pendingHistoryCommitTimer = null;
+  }
+}
+
+function finalizeHistoryAction(action) {
+  if (!action || !action.patches.length) {
+    return;
+  }
+
+  undoStack.push(action);
+  if (undoStack.length > HISTORY_LIMIT) {
+    undoStack = undoStack.slice(undoStack.length - HISTORY_LIMIT);
+  }
+  redoStack = [];
+}
+
+function commitPendingHistoryAction() {
+  if (!pendingHistoryAction || isApplyingHistory) {
+    return;
+  }
+
+  finalizeHistoryAction(pendingHistoryAction);
+  pendingHistoryAction = null;
+  clearPendingHistoryTimer();
+}
+
+function schedulePendingHistoryCommit() {
+  clearPendingHistoryTimer();
+  pendingHistoryCommitTimer = window.setTimeout(() => {
+    commitPendingHistoryAction();
+  }, HISTORY_GROUP_WINDOW_MS);
+}
+
+function ensureActiveHistoryAction(type, options = {}) {
+  if (isApplyingHistory) {
+    return null;
+  }
+
+  const forceIsolated = !!options.forceIsolated;
+  const groupKey = options.groupKey || null;
+
+  if (forceIsolated) {
+    commitPendingHistoryAction();
+    const isolated = createHistoryAction(type, options);
+    activeHistoryAction = isolated;
+    return isolated;
+  }
+
+  if (!pendingHistoryAction) {
+    pendingHistoryAction = createHistoryAction(type, options);
+    schedulePendingHistoryCommit();
+    return pendingHistoryAction;
+  }
+
+  const sameType = pendingHistoryAction.type === type;
+  const sameGroup = pendingHistoryAction.groupKey && groupKey && pendingHistoryAction.groupKey === groupKey;
+  if (sameType && sameGroup) {
+    schedulePendingHistoryCommit();
+    return pendingHistoryAction;
+  }
+
+  commitPendingHistoryAction();
+  pendingHistoryAction = createHistoryAction(type, options);
+  schedulePendingHistoryCommit();
+  return pendingHistoryAction;
+}
+
+function closeActiveHistoryAction() {
+  if (!activeHistoryAction || isApplyingHistory) {
+    activeHistoryAction = null;
+    return;
+  }
+
+  finalizeHistoryAction(activeHistoryAction);
+  activeHistoryAction = null;
+}
+
+function withHistoryAction(type, options, callback) {
+  const action = ensureActiveHistoryAction(type, { ...options, forceIsolated: true });
+  if (!action) {
+    return callback?.();
+  }
+
+  try {
+    return callback?.();
+  } finally {
+    closeActiveHistoryAction();
+  }
+}
+
+function addPatchToCurrentAction(patch, options = {}) {
+  if (isApplyingHistory || !patch) {
+    return;
+  }
+
+  const current = activeHistoryAction || ensureActiveHistoryAction(options.type || "edit", options);
+  if (!current) {
+    return;
+  }
+
+  current.patches.push(patch);
+}
+
+function applyPatch(patch, direction) {
+  if (!patch) {
+    return;
+  }
+
+  if (patch.type === "setCell") {
+    const value = direction === "forward" ? patch.after : patch.before;
+    const block = blocks[patch.blockIndex];
+    const row = block?.rows?.[patch.rowIndex];
+    if (!row) {
+      return;
+    }
+
+    const normalized = parseCellValue(patch.columnKey, value);
+    if (patch.columnKey === "title") {
+      row.title = normalized;
+    } else if (patch.columnKey === "listo") {
+      row.listo = normalized;
+    } else if (DATE_COLUMNS.has(patch.columnKey)) {
+      applyDateCellValue(row, patch.columnKey, normalized, { preserveRawOnInvalid: true });
+    } else if (patch.columnKey === "genre") {
+      row.genre = normalized;
+    } else if (patch.columnKey === "id") {
+      row.id = normalized;
+    }
+    return;
+  }
+
+  if (patch.type === "insertRows") {
+    const block = blocks[patch.blockIndex];
+    if (!block) {
+      return;
+    }
+
+    const nextRows = [...block.rows];
+    if (direction === "forward") {
+      nextRows.splice(patch.atIndex, 0, ...cloneRows(patch.rows));
+    } else {
+      nextRows.splice(patch.atIndex, patch.rows.length);
+    }
+    blocks[patch.blockIndex] = { ...block, rows: nextRows };
+    return;
+  }
+
+  if (patch.type === "deleteRows") {
+    const block = blocks[patch.blockIndex];
+    if (!block) {
+      return;
+    }
+
+    const nextRows = [...block.rows];
+    if (direction === "forward") {
+      nextRows.splice(patch.atIndex, patch.rows.length);
+      if (!nextRows.length) {
+        const fallbackBlockType = block.blockType || "";
+        nextRows.push(newRowForBlock(fallbackBlockType, currentCalendarContext));
+      }
+    } else {
+      nextRows.splice(patch.atIndex, 0, ...cloneRows(patch.rows));
+    }
+    blocks[patch.blockIndex] = { ...block, rows: nextRows };
+  }
+}
+
+function restoreHistoryFocus(action) {
+  const fallbackMeta = action?.primaryCell || null;
+  let cell = null;
+
+  if (fallbackMeta?.rowKey) {
+    const resolved = getCellMetaFromRowKey(fallbackMeta.rowKey, fallbackMeta.columnKey);
+    cell = getCellByMeta(resolved);
+  }
+
+  if (!cell && fallbackMeta?.blockIndex !== undefined) {
+    cell = getCellByMeta(fallbackMeta);
+  }
+
+  if (cell) {
+    setSelectedCell(cell);
+    focusCellWithoutEditing(cell);
+  }
+}
+
+function runHistoryAction(action, direction) {
+  if (!action?.patches?.length) {
+    return;
+  }
+
+  commitPendingHistoryAction();
+  clearPendingHistoryTimer();
+
+  isApplyingHistory = true;
+  try {
+    const patches = direction === "undo" ? [...action.patches].reverse() : action.patches;
+    const patchDirection = direction === "undo" ? "backward" : "forward";
+    patches.forEach((patch) => applyPatch(patch, patchDirection));
+  } finally {
+    isApplyingHistory = false;
+  }
+
+  renderRows();
+  restoreHistoryFocus(action);
+}
+
+function undoLastAction() {
+  commitPendingHistoryAction();
+  const action = undoStack.pop();
+  if (!action) {
+    return;
+  }
+
+  runHistoryAction(action, "undo");
+  redoStack.push(action);
+}
+
+function redoLastAction() {
+  commitPendingHistoryAction();
+  const action = redoStack.pop();
+  if (!action) {
+    return;
+  }
+
+  runHistoryAction(action, "redo");
+  undoStack.push(action);
+}
+
+function createSetCellPatch(meta, before, after) {
+  return {
+    type: "setCell",
+    blockIndex: meta.blockIndex,
+    rowIndex: meta.rowIndex,
+    rowKey: meta.rowKey,
+    columnKey: meta.columnKey,
+    before,
+    after,
+  };
+}
 
 function getMonthTitleText(month, year) {
   const monthName = MONTH_NAMES_ES[month - 1] || "";
@@ -479,20 +796,37 @@ function duplicateRowsAroundSelection(direction, preferredBlockIndex = null, pre
     return;
   }
 
-  const nextRows = [...block.rows];
-  const sourceRows = nextRows.slice(startRow, endRow + 1).map((row) => ({ ...row }));
+  withHistoryAction("duplicate", { groupKey: `duplicate:${blockIndex}:${startRow}:${direction}` }, () => {
+    const nextRows = [...block.rows];
+    const sourceRows = nextRows.slice(startRow, endRow + 1).map((row) => ({ ...row }));
 
-  const targetStart = direction === "above" ? startRow : endRow + 1;
-  const rowsToInsert = Array.from({ length: count }, () => newRowForBlock(block.blockType, currentCalendarContext));
-  nextRows.splice(targetStart, 0, ...rowsToInsert);
+    const targetStart = direction === "above" ? startRow : endRow + 1;
+    const rowsToInsert = Array.from({ length: count }, () => newRowForBlock(block.blockType, currentCalendarContext));
+    nextRows.splice(targetStart, 0, ...rowsToInsert);
 
-  sourceRows.forEach((sourceRow, offset) => {
-    const targetIndex = targetStart + offset;
-    nextRows[targetIndex] = copyRowDataInto(sourceRow, nextRows[targetIndex]);
+    sourceRows.forEach((sourceRow, offset) => {
+      const targetIndex = targetStart + offset;
+      nextRows[targetIndex] = copyRowDataInto(sourceRow, nextRows[targetIndex]);
+    });
+
+    blocks[blockIndex] = { ...block, rows: nextRows };
+    addPatchToCurrentAction({ type: "insertRows", blockIndex, atIndex: targetStart, rows: cloneRows(rowsToInsert) }, { type: "duplicate" });
+    sourceRows.forEach((sourceRow, offset) => {
+      const row = nextRows[targetStart + offset];
+      if (!row) {
+        return;
+      }
+      ["listo", "title", "startDate", "endDate", "genre", "id"].forEach((columnKey) => {
+        const before = getCellRawValue(row, columnKey);
+        const after = getCellRawValue(sourceRow, columnKey);
+        if (before !== after) {
+          addPatchToCurrentAction(createSetCellPatch({ blockIndex, rowIndex: targetStart + offset, rowKey: row.rowKey, columnKey }, before, after), { type: "duplicate" });
+        }
+      });
+    });
+
+    renderRows();
   });
-
-  blocks[blockIndex] = { ...block, rows: nextRows };
-  renderRows();
 }
 
 function refreshDeleteControls() {
@@ -1119,13 +1453,14 @@ function applyDateCellValue(row, columnKey, rawValue, { preserveRawOnInvalid = t
   return { ok: false, display: row[textField], iso: null, error: parsed.error };
 }
 
-function setCellValue(cell, rawValue) {
+function setCellValue(cell, rawValue, historyOptions = {}) {
   const rowData = getRowByCell(cell);
   if (!rowData) {
     return null;
   }
 
   const { row, meta } = rowData;
+  const before = getCellRawValue(row, meta.columnKey);
   const parsedValue = parseCellValue(meta.columnKey, rawValue);
 
   if (meta.columnKey === "title") {
@@ -1150,6 +1485,17 @@ function setCellValue(cell, rawValue) {
   } else if (meta.columnKey === "id") {
     row.id = parsedValue;
     cell.textContent = row.id;
+  }
+
+  const after = getCellRawValue(row, meta.columnKey);
+  if (before !== after) {
+    addPatchToCurrentAction(
+      createSetCellPatch({ ...meta, rowKey: row.rowKey }, before, after),
+      {
+        type: historyOptions.type || "edit",
+        groupKey: historyOptions.groupKey || `${meta.blockIndex}:${meta.rowIndex}:${meta.columnKey}`,
+      }
+    );
   }
 
   return { row, meta };
@@ -1795,17 +2141,19 @@ function applyFillDown(masterMeta, targetRowIndex) {
   }
 
   const masterValue = getCellRawValue(masterData.row, masterMeta.columnKey);
-  for (let rowIndex = masterMeta.rowIndex + 1; rowIndex <= targetRowIndex; rowIndex += 1) {
-    const targetCell = document.querySelector(
-      `[data-block-index="${masterMeta.blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${masterMeta.columnKey}"]`
-    );
-    if (!targetCell) {
-      continue;
-    }
+  withHistoryAction("fill", { groupKey: `fill:${masterMeta.blockIndex}:${masterMeta.columnKey}:${masterMeta.rowIndex}` }, () => {
+    for (let rowIndex = masterMeta.rowIndex + 1; rowIndex <= targetRowIndex; rowIndex += 1) {
+      const targetCell = document.querySelector(
+        `[data-block-index="${masterMeta.blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${masterMeta.columnKey}"]`
+      );
+      if (!targetCell) {
+        continue;
+      }
 
-    const offset = rowIndex - masterMeta.rowIndex;
-    setCellValue(targetCell, computeFillValue(masterValue, offset, masterMeta.columnKey));
-  }
+      const offset = rowIndex - masterMeta.rowIndex;
+      setCellValue(targetCell, computeFillValue(masterValue, offset, masterMeta.columnKey), { type: "fill", groupKey: `fill:${masterMeta.blockIndex}:${masterMeta.columnKey}:${masterMeta.rowIndex}` });
+    }
+  });
 }
 
 function stopFillDrag(applyChanges) {
@@ -1907,7 +2255,30 @@ function handleGridEnterKey(event) {
   const isArrowNavigationKey = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key);
   const isPrintableKey = event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
   const hasSelectedCell = !!selectedCell && !!getCellMeta(selectedCell);
+  const keyLower = event.key.toLowerCase();
+  const isUndoShortcut = (event.ctrlKey || event.metaKey) && keyLower === "z" && !event.shiftKey;
+  const isRedoShortcut = ((event.ctrlKey || event.metaKey) && keyLower === "z" && event.shiftKey)
+    || (event.ctrlKey && !event.metaKey && keyLower === "y");
 
+  if (isUndoShortcut || isRedoShortcut) {
+    const activeElement = document.activeElement;
+    const editingNative = isEditingElement(activeElement) && !(activeElement?.classList?.contains("editor-overlay"));
+    if (editingNative) {
+      return;
+    }
+
+    event.preventDefault();
+    if (editingCell) {
+      editingCell.cancel?.();
+    }
+    if (isUndoShortcut) {
+      undoLastAction();
+    } else {
+      redoLastAction();
+    }
+    return;
+  }
+  
   if (editingCell) {
     if (editingCell.type === "select" && typeof editingCell.handleKeyDown === "function") {
       const handled = editingCell.handleKeyDown(event);
@@ -2090,7 +2461,7 @@ function handleGridEnterKey(event) {
       });
 
       if (matchedOption) {
-        setCellValue(selectedCell, matchedOption);
+        setCellValue(selectedCell, matchedOption, { type: "edit", groupKey: `${selectedCell.dataset.blockIndex}:${selectedCell.dataset.rowIndex}:${selectedCell.dataset.columnKey}` });
       }
       return;
     }
@@ -2107,14 +2478,16 @@ function handleGridEnterKey(event) {
       && dragSelection.r2 > dragSelection.r1;
 
     if (hasVerticalRangeSelection && !editingCell && !isEditingElement(document.activeElement)) {
-      for (let rowIndex = dragSelection.r1; rowIndex <= dragSelection.r2; rowIndex += 1) {
-        const targetCell = document.querySelector(
-          `[data-block-index="${dragSelection.blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${dragSelection.col}"]`
-        );
-        if (targetCell) {
-          setCellValue(targetCell, "");
+      withHistoryAction("clear", { groupKey: `clear:${dragSelection.blockIndex}:${dragSelection.col}` }, () => {
+        for (let rowIndex = dragSelection.r1; rowIndex <= dragSelection.r2; rowIndex += 1) {
+          const targetCell = document.querySelector(
+            `[data-block-index="${dragSelection.blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${dragSelection.col}"]`
+          );
+          if (targetCell) {
+            setCellValue(targetCell, "", { type: "clear", groupKey: `clear:${dragSelection.blockIndex}:${dragSelection.col}` });
+          }
         }
-      }
+      });
 
       event.preventDefault();
       return;
@@ -2126,7 +2499,9 @@ function handleGridEnterKey(event) {
     }
 
     event.preventDefault();
-    setCellValue(selectedCell, "");
+    withHistoryAction("clear", { groupKey: `clear:${selectedCell.dataset.blockIndex}:${selectedCell.dataset.rowIndex}:${selectedCell.dataset.columnKey}` }, () => {
+      setCellValue(selectedCell, "", { type: "clear", groupKey: `clear:${selectedCell.dataset.blockIndex}:${selectedCell.dataset.rowIndex}:${selectedCell.dataset.columnKey}` });
+    });
     
     focusCellEditor(selectedCell);
     return;
@@ -2142,7 +2517,7 @@ function handleGridPaste(event) {
     return;
   }
 
-    const pastedText = event.clipboardData?.getData("text/plain") || "";
+  const pastedText = event.clipboardData?.getData("text/plain") || "";
   const clipboardRows = pastedText
     .split(/\r?\n/)
     .filter((line, index, all) => line !== "" || index < all.length - 1);
@@ -2156,96 +2531,100 @@ function handleGridPaste(event) {
 
   const isEditorActive = isEditingElement(document.activeElement);
 
-  if (hasVerticalRangeSelection && !isEditorActive) {
-    const selection = { ...dragSelection };
-    const rangeSize = selection.r2 - selection.r1 + 1;
-    const pasteValues = resolveVerticalPasteValues({
-      rangeSize,
-      clipboardText: pastedText,
-    });
-    if (!pasteValues.length) {
+  event.preventDefault();
+  withHistoryAction("paste", { groupKey: "paste" }, () => {
+    if (hasVerticalRangeSelection && !isEditorActive) {
+      const selection = { ...dragSelection };
+      const rangeSize = selection.r2 - selection.r1 + 1;
+      const pasteValues = resolveVerticalPasteValues({
+        rangeSize,
+        clipboardText: pastedText,
+      });
+      if (!pasteValues.length) {
+        return;
+      }
+
+      const missingRows = Math.max(0, pasteValues.length - rangeSize);
+      const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
+      if (rowsToInsert > 0) {
+        insertRows(selection.blockIndex, selection.r2 + 1, rowsToInsert, { historyType: "paste" });
+        dragSelection = {
+          ...selection,
+          r2: selection.r2 + rowsToInsert,
+        };
+        renderDragSelectionPreview(dragSelection);
+
+        if (missingRows > MAX_AUTO_INSERT) {
+          showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
+        }
+      }
+
+      const maxPasteRows = rangeSize + rowsToInsert;
+      for (let offset = 0; offset < Math.min(pasteValues.length, maxPasteRows); offset += 1) {
+        const targetCell = document.querySelector(
+          `[data-block-index="${selection.blockIndex}"][data-row-index="${selection.r1 + offset}"][data-column-key="${selection.col}"]`
+        );
+        if (targetCell) {
+          setCellValue(targetCell, pasteValues[offset], { type: "paste", groupKey: "paste" });
+        }
+      }
+
+      renderRows();
       return;
     }
 
-    event.preventDefault();
+    const rowData = getRowByCell(selectedCell);
+    if (!rowData) {
+      return;
+    }
 
-    const missingRows = Math.max(0, pasteValues.length - rangeSize);
-    const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
-    if (rowsToInsert > 0) {
-      insertRows(selection.blockIndex, selection.r2 + 1, rowsToInsert);
-      dragSelection = {
-        ...selection,
-        r2: selection.r2 + rowsToInsert,
-      };
-      renderDragSelectionPreview(dragSelection);
+    const startMeta = rowData.meta;
+    const block = blocks[startMeta.blockIndex];
+    if (!block?.rows?.length) {
+      return;
+    }
 
-      if (missingRows > MAX_AUTO_INSERT) {
-        showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
+    if (clipboardRows.length > 1) {
+      const availableRows = Math.max(0, block.rows.length - startMeta.rowIndex);
+      const missingRows = Math.max(0, clipboardRows.length - availableRows);
+      const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
+      if (rowsToInsert > 0) {
+        insertRows(startMeta.blockIndex, block.rows.length, rowsToInsert, { historyType: "paste" });
+
+        if (missingRows > MAX_AUTO_INSERT) {
+          showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
+        }
       }
     }
 
-    const maxPasteRows = rangeSize + rowsToInsert;
-    for (let offset = 0; offset < Math.min(pasteValues.length, maxPasteRows); offset += 1) {
+    const currentBlock = blocks[startMeta.blockIndex];
+    const availableRowsAfterInsert = Math.max(0, (currentBlock?.rows?.length || 0) - startMeta.rowIndex);
+    const maxPasteRows = clipboardRows.length > 1
+      ? Math.min(clipboardRows.length, availableRowsAfterInsert)
+      : 1;
+
+    for (let offset = 0; offset < maxPasteRows; offset += 1) {
+      const line = clipboardRows[offset];
       const targetCell = document.querySelector(
-        `[data-block-index="${selection.blockIndex}"][data-row-index="${selection.r1 + offset}"][data-column-key="${selection.col}"]`
+        `[data-block-index="${startMeta.blockIndex}"][data-row-index="${startMeta.rowIndex + offset}"][data-column-key="${startMeta.columnKey}"]`
       );
       if (targetCell) {
-        setCellValue(targetCell, pasteValues[offset]);
+        setCellValue(targetCell, line, { type: "paste", groupKey: "paste" });
       }
     }
-    return;
-  }
 
-  const rowData = getRowByCell(selectedCell);
-  if (!rowData) {
-    return;
-  }
+    renderRows();
 
-  event.preventDefault();
-  const startMeta = rowData.meta;
-  const block = blocks[startMeta.blockIndex];
-  if (!block?.rows?.length) {
-    return;
-  }
-
-  if (clipboardRows.length > 1) {
-    const availableRows = Math.max(0, block.rows.length - startMeta.rowIndex);
-    const missingRows = Math.max(0, clipboardRows.length - availableRows);
-    const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
-    if (rowsToInsert > 0) {
-      insertRows(startMeta.blockIndex, block.rows.length, rowsToInsert);
-
-      if (missingRows > MAX_AUTO_INSERT) {
-        showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
+    if (DATE_COLUMNS.has(startMeta.columnKey)) {
+      const finalCell = document.querySelector(
+        `[data-block-index="${startMeta.blockIndex}"][data-row-index="${Math.min(startMeta.rowIndex + maxPasteRows - 1, blocks[startMeta.blockIndex].rows.length - 1)}"][data-column-key="${startMeta.columnKey}"]`
+      );
+      if (finalCell) {
+        setSelectedCell(finalCell);
+        focusCellWithoutEditing(finalCell);
       }
     }
-  }
-
-  const currentBlock = blocks[startMeta.blockIndex];
-  const availableRowsAfterInsert = Math.max(0, (currentBlock?.rows?.length || 0) - startMeta.rowIndex);
-  const maxPasteRows = clipboardRows.length > 1
-    ? Math.min(clipboardRows.length, availableRowsAfterInsert)
-    : 1;
-
-  for (let offset = 0; offset < maxPasteRows; offset += 1) {
-    const line = clipboardRows[offset];
-    const targetCell = document.querySelector(
-      `[data-block-index="${startMeta.blockIndex}"][data-row-index="${startMeta.rowIndex + offset}"][data-column-key="${startMeta.columnKey}"]`
-    );
-    if (targetCell) {
-      setCellValue(targetCell, line);
-    }
-  }
-
-  if (DATE_COLUMNS.has(startMeta.columnKey)) {
-    const finalCell = document.querySelector(
-      `[data-block-index="${startMeta.blockIndex}"][data-row-index="${Math.min(startMeta.rowIndex + maxPasteRows - 1, blocks[startMeta.blockIndex].rows.length - 1)}"][data-column-key="${startMeta.columnKey}"]`
-    );
-    if (finalCell) {
-      setSelectedCell(finalCell);
-      focusCellWithoutEditing(finalCell);
-    }
-  }
+  });
 }
 
 function attachDateCell(cell, row, columnKey) {
@@ -2280,7 +2659,7 @@ function attachDateCell(cell, row, columnKey) {
     };
 
     const commit = () => {
-      applyDateCellValue(row, columnKey, input.value);
+      setCellValue(cell, input.value, { type: "edit", groupKey: `${cell.dataset.blockIndex}:${cell.dataset.rowIndex}:${cell.dataset.columnKey}` });
       cleanup();
     };
 
@@ -2346,7 +2725,7 @@ function attachGenreCell(cell, row) {
 
     const commit = () => {
       if (!cancelled) {
-        row.genre = parseCellValue("genre", row.genre);
+        setCellValue(cell, row.genre, { type: "edit", groupKey: `${cell.dataset.blockIndex}:${cell.dataset.rowIndex}:${cell.dataset.columnKey}` });
       }
       cleanup();
     };
@@ -2475,24 +2854,39 @@ function insertRow(blockIndex, atIndex) {
   insertRows(blockIndex, atIndex, 1);
 }
 
-function insertRows(blockIndex, atIndex, count = 1) {
+function insertRows(blockIndex, atIndex, count = 1, options = {}) {
   if (!Number.isInteger(count) || count <= 0) {
-    return;
+    return [];
   }
 
   const block = blocks[blockIndex];
   if (!block) {
-    return;
+    return [];
   }
 
   const nextRows = [...block.rows];
   const rowsToInsert = Array.from({ length: count }, () => newRowForBlock(block.blockType, currentCalendarContext));
   nextRows.splice(atIndex, 0, ...rowsToInsert);
   blocks[blockIndex] = { ...block, rows: nextRows };
-  renderRows();
+
+  addPatchToCurrentAction(
+    {
+      type: "insertRows",
+      blockIndex,
+      atIndex,
+      rows: cloneRows(rowsToInsert),
+    },
+    { type: options.historyType || "rows", groupKey: options.groupKey || `insert:${blockIndex}:${atIndex}` }
+  );
+
+  if (options.render !== false) {
+    renderRows();
+  }
+
+  return rowsToInsert;
 }
 
-function deleteRowsInBlock(blockIndex, startRow, endRow) {
+function deleteRowsInBlock(blockIndex, startRow, endRow, options = {}) {
   const block = blocks[blockIndex];
   if (!block?.rows?.length) {
     return null;
@@ -2512,6 +2906,7 @@ function deleteRowsInBlock(blockIndex, startRow, endRow) {
   }
 
   const removeCount = safeEnd - safeStart + 1;
+  const removedRows = cloneRows(block.rows.slice(safeStart, safeEnd + 1));
   const nextRows = [...block.rows];
   nextRows.splice(safeStart, removeCount);
 
@@ -2520,6 +2915,16 @@ function deleteRowsInBlock(blockIndex, startRow, endRow) {
   }
 
   blocks[blockIndex] = { ...block, rows: nextRows };
+
+  addPatchToCurrentAction(
+    {
+      type: "deleteRows",
+      blockIndex,
+      atIndex: safeStart,
+      rows: removedRows,
+    },
+    { type: options.historyType || "rows", groupKey: options.groupKey || `delete:${blockIndex}:${safeStart}` }
+  );
 
   return {
     removedStart: safeStart,
@@ -2624,12 +3029,14 @@ function executeDeleteRows(target) {
     return;
   }
 
-  const deleteInfo = deleteRowsInBlock(target.blockIndex, target.startRow, target.endRow);
-  if (!deleteInfo) {
-    return;
-  }
+  withHistoryAction("delete-rows", { groupKey: `delete:${target.blockIndex}:${target.startRow}:${target.endRow}` }, () => {
+    const deleteInfo = deleteRowsInBlock(target.blockIndex, target.startRow, target.endRow, { historyType: "delete-rows" });
+    if (!deleteInfo) {
+      return;
+    }
 
-  normalizeSelectionAfterDelete(target.blockIndex, deleteInfo);
+    normalizeSelectionAfterDelete(target.blockIndex, deleteInfo);
+  });
 }
 
 function ensureContextMenuElement() {
@@ -2670,7 +3077,9 @@ function ensureContextMenuElement() {
         closeContextMenu();
         return;
       }
-      insertRows(blockIndex, insertTarget.startRow, insertTarget.count);
+      withHistoryAction("insert-rows", { groupKey: `insert:${blockIndex}:${insertTarget.startRow}` }, () => {
+        insertRows(blockIndex, insertTarget.startRow, insertTarget.count, { historyType: "insert-rows" });
+      });
       closeContextMenu();
       return;
     }
@@ -2681,7 +3090,9 @@ function ensureContextMenuElement() {
         closeContextMenu();
         return;
       }
-      insertRows(blockIndex, insertTarget.endRow + 1, insertTarget.count);
+      withHistoryAction("insert-rows", { groupKey: `insert:${blockIndex}:${insertTarget.endRow + 1}` }, () => {
+        insertRows(blockIndex, insertTarget.endRow + 1, insertTarget.count, { historyType: "insert-rows" });
+      });
       closeContextMenu();
       return;
     }
@@ -2835,13 +3246,13 @@ function attachListoCheckbox(cell, row) {
   input.checked = !!row.listo;
   input.setAttribute("aria-label", "Marcar LISTO");
 
-  const toggleListo = () => {
-    row.listo = !row.listo;
+  const toggleListo = (nextValue = !row.listo) => {
+    setCellValue(cell, nextValue ? "true" : "", { type: "toggle", groupKey: `${cell.dataset.blockIndex}:${cell.dataset.rowIndex}:listo` });
     input.checked = row.listo;
   };
 
   input.addEventListener("change", () => {
-    row.listo = input.checked;
+    toggleListo(input.checked);
   });
 
   cell.addEventListener("click", (event) => {
@@ -2881,10 +3292,17 @@ function attachBlockListoCheckbox(cell, block) {
 
   const toggleBlock = () => {
     const targetValue = !(block.rows.length > 0 && block.rows.every((row) => !!row.listo));
-    block.rows.forEach((row) => {
-      row.listo = targetValue;
+    withHistoryAction("toggle", { groupKey: `toggle-block:${block.id}` }, () => {
+      block.rows.forEach((row, rowIndex) => {
+        const before = getCellRawValue(row, "listo");
+        const after = targetValue ? "true" : "";
+        if (before !== after) {
+          addPatchToCurrentAction(createSetCellPatch({ blockIndex: blocks.findIndex((candidate) => candidate.id === block.id), rowIndex, rowKey: row.rowKey, columnKey: "listo" }, before, after), { type: "toggle", groupKey: `toggle-block:${block.id}` });
+          row.listo = targetValue;
+        }
+      });
+      renderRows();
     });
-    renderRows();
   };
 
   input.addEventListener("click", (event) => {
@@ -3028,8 +3446,9 @@ function attachTitleCell(cell, row) {
       if (cancelled) {
         return;
       }
-      
-      row.title = (input.value || "").slice(0, 100);
+
+      const nextValue = (input.value || "").slice(0, 100);
+      setCellValue(cell, nextValue, { type: "edit", groupKey: `${cell.dataset.blockIndex}:${cell.dataset.rowIndex}:${cell.dataset.columnKey}` });
       input.remove();
       window.removeEventListener("resize", updateOverlayPosition);
       cleanupEditingState();
@@ -3124,7 +3543,7 @@ function attachIdTextCell(cell, row) {
     };
 
     const commit = () => {
-      row.id = input.value || "";
+      setCellValue(cell, input.value || "", { type: "edit", groupKey: `${cell.dataset.blockIndex}:${cell.dataset.rowIndex}:${cell.dataset.columnKey}` });
       cleanup();
     };
 
