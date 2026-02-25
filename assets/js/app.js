@@ -2866,6 +2866,43 @@ function attachListoCheckbox(cell, row) {
   cell.appendChild(input);
 }
 
+function attachBlockListoCheckbox(cell, block) {
+  cell.classList.add("checkbox-cell", "checkbox-cell--group-toggle");
+  cell.textContent = "";
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.className = "listo-checkbox";
+  input.setAttribute("aria-label", `Marcar LISTO para todo el bloque ${block.blockType}`);
+
+  const syncInputState = () => {
+    input.checked = block.rows.length > 0 && block.rows.every((row) => !!row.listo);
+  };
+
+  const toggleBlock = () => {
+    const targetValue = !(block.rows.length > 0 && block.rows.every((row) => !!row.listo));
+    block.rows.forEach((row) => {
+      row.listo = targetValue;
+    });
+    renderRows();
+  };
+
+  input.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleBlock();
+  });
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === " " || event.key === "Spacebar") {
+      event.preventDefault();
+      toggleBlock();
+    }
+  });
+
+  syncInputState();
+  cell.appendChild(input);
+}
+
 function attachTitleCell(cell, row) {
   cell.classList.add("title-cell");
   let isEditing = false;
@@ -3275,6 +3312,8 @@ function renderRows() {
       groupLeftRow.style.setProperty("--group-bg", block.headerColor);
       groupDayRow.style.setProperty("--group-bg", block.headerColor);
     }
+
+        attachBlockListoCheckbox(groupLeftRow.children[1], block);
 
     leftBody.appendChild(groupLeftRow);
     rightBody.appendChild(groupDayRow);
