@@ -1270,6 +1270,18 @@ function intersectsVisibleMonth(rowRange, monthRange) {
 }
 
 function getOrderedRowsForMonth(block, calendarContext) {
+  const getVisibleRowPriority = (item) => {
+    if (item.isInheritedInMonth) {
+      return 0;
+    }
+
+    if (isPlaceholderRow(item.row)) {
+      return 2;
+    }
+
+    return 1;
+  };
+
   const monthRange = getVisibleMonthRange(calendarContext);
   const indexedRows = block.rows.map((row, sourceIndex) => {
     if (!Number.isInteger(row.homeMonth) || !Number.isInteger(row.homeYear)) {
@@ -1301,8 +1313,16 @@ function getOrderedRowsForMonth(block, calendarContext) {
   });
 
   const visibleRows = indexedRows.filter((item) => item.isVisibleInCurrentMonth);
-  
-  const orderedVisibleRows = visibleRows;
+
+  const orderedVisibleRows = [...visibleRows].sort((left, right) => {
+    const priorityDelta = getVisibleRowPriority(left) - getVisibleRowPriority(right);
+    if (priorityDelta !== 0) {
+      return priorityDelta;
+    }
+
+    return left.sourceIndex - right.sourceIndex;
+  });
+
   if (orderedVisibleRows.length) {
     return orderedVisibleRows;
   }
