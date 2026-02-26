@@ -215,6 +215,85 @@ body {
   color: #ffffff;
 }
 
+.export-excel-wrapper {
+  position: relative;
+  display: inline-flex;
+  margin-left: 8px;
+}
+
+.export-excel-btn {
+  appearance: none;
+  border: 1px solid #333333;
+  background: #ffffff;
+  color: #333333;
+  font-family: inherit;
+  width: 168px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.export-excel-btn:hover,
+.export-excel-btn:focus-visible,
+.export-excel-btn[aria-expanded="true"] {
+  border-color: #333333;
+  background: #333333;
+  color: #ffffff;
+}
+
+.export-excel-btn__arrow {
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.export-excel-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: 100%;
+  background: #ffffff;
+  border: 1px solid #333333;
+  z-index: 500;
+  padding: 2px 0;
+}
+
+.export-excel-menu.open {
+  display: block;
+}
+
+.export-excel-menu__item {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #333333;
+}
+
+.export-excel-menu__item:hover,
+.export-excel-menu__item:focus-visible {
+  background: #333333;
+  color: #ffffff;
+  outline: none;
+}
+
 .panel-layout__section-separator {
   flex: 0 0 auto;
   width: min(var(--month-grid-width), 100%);
@@ -376,30 +455,6 @@ body {
 .left-header > div:last-child,
 .left-row > div:last-child {
   border-right: 2px solid var(--grid-border);
-}
-
-.left-header-sortable {
-  cursor: pointer;
-  user-select: none;
-  gap: 3px;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-
-.left-header-sortable:hover {
-  background: #555555;
-  color: #ffffff;
-}
-
-.left-header-sortable.sort-active {
-  background: #333333;
-  color: #ffffff;
-}
-
-.sort-arrow {
-  font-size: 10px;
-  line-height: 1;
-  flex-shrink: 0;
-  opacity: 0.85;
 }
 
 .left-row > div,
