@@ -54,6 +54,17 @@ const MONTH_LABEL_TO_NUMBER = {
 const DATE_COLUMNS = new Set(["startDate", "endDate"]);
 const DEFAULT_MAX_SIMULTANEOUS = 5;
 const GLOBAL_COLLAPSE_BUTTON_ID = "global-collapse-toggle";
+const ENABLE_EXCEL_IMPORT = window.PANEL_FEATURES?.excelImportV2 !== false;
+const EXCEL_BLOCK_HEADER_CANDIDATES = ["BLOQUE", "TIPO BLOQUE", "TIPO", "FORMATO"];
+
+const EXCEL_COLUMN_ALIASES = {
+  listo: ["LISTO", "READY", "OK"],
+  title: ["TÍTULO", "TITULO", "TITLE", "NOMBRE"],
+  startDate: ["INICIO VIG", "INICIO", "FECHA INICIO", "START", "START DATE"],
+  endDate: ["FIN VIG", "FIN", "FECHA FIN", "END", "END DATE"],
+  genre: ["GÉNERO", "GENERO", "GÉNERO/PROGRAMA", "GENRE"],
+  id: ["ID", "CÓDIGO", "CODIGO", "IDENTIFICADOR"],
+};
 
 let rowId = 0;
 
@@ -1211,6 +1222,225 @@ function formatDateISO(day, month, year) {
   const dd = String(day).padStart(2, "0");
   const mm = String(month).padStart(2, "0");
   return `${year}-${mm}-${dd}`;
+}
+
+function normalizeHeaderToken(value) {
+  return `${value ?? ""}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
+function findExcelHeaderMatch(sourceHeader, candidates) {
+  const normalizedSource = normalizeHeaderToken(sourceHeader);
+  return candidates.some((candidate) => normalizedSource === normalizeHeaderToken(candidate));
+}
+
+function mapExcelColumns(headerRow) {
+  const mapping = {};
+  const normalizedHeaders = Array.isArray(headerRow) ? headerRow : [];
+
+  Object.entries(EXCEL_COLUMN_ALIASES).forEach(([columnKey, aliases]) => {
+    const index = normalizedHeaders.findIndex((header) => findExcelHeaderMatch(header, aliases));
+    if (index >= 0) {
+      mapping[columnKey] = index;
+    }
+  });
+
+  const blockIndex = normalizedHeaders.findIndex((header) => findExcelHeaderMatch(header, EXCEL_BLOCK_HEADER_CANDIDATES));
+  if (blockIndex >= 0) {
+    mapping.blockType = blockIndex;
+  }
+
+  return mapping;
+}
+
+function excelDateNumberToDisplay(value) {
+  if (!window.XLSX?.SSF?.parse_date_code || typeof value !== "number") {
+    return null;
+  }
+
+  const parsed = window.XLSX.SSF.parse_date_code(value);
+  if (!parsed || !parsed.y || !parsed.m || !parsed.d) {
+    return null;
+  }
+
+  return formatDateDisplay(parsed.d, parsed.m, parsed.y);
+}
+
+function normalizeImportedCellValue(columnKey, rawValue) {
+  if (!DATE_COLUMNS.has(columnKey)) {
+    return `${rawValue ?? ""}`;
+  }
+
+  if (typeof rawValue === "number") {
+    return excelDateNumberToDisplay(rawValue) || `${rawValue}`;
+  }
+
+  return `${rawValue ?? ""}`;
+}
+
+function isImportedRowEmpty(rowValues, mapping) {
+  const trackedKeys = ["title", "startDate", "endDate", "genre", "id", "listo", "blockType"];
+  return trackedKeys.every((key) => {
+    const index = mapping[key];
+    if (!Number.isInteger(index)) {
+      return true;
+    }
+
+    return !`${rowValues[index] ?? ""}`.trim();
+  });
+}
+
+function findTargetBlockIndex(rawBlockType) {
+  const normalizedBlock = normalizeHeaderToken(rawBlockType);
+  if (!normalizedBlock) {
+    return blocks.findIndex((block) => !block.isSeparator);
+  }
+
+  return blocks.findIndex((block) => !block.isSeparator && normalizeHeaderToken(block.blockType) === normalizedBlock);
+}
+
+function importRowsFromExcelMatrix(matrix) {
+  if (!Array.isArray(matrix) || matrix.length < 2) {
+    showGridToast("El archivo no contiene datos para importar");
+    return;
+  }
+
+  const [headerRow, ...dataRows] = matrix;
+  const mapping = mapExcelColumns(headerRow);
+  if (!Number.isInteger(mapping.title) || !Number.isInteger(mapping.startDate) || !Number.isInteger(mapping.endDate)) {
+    showGridToast("Faltan columnas obligatorias: TÍTULO, INICIO VIG o FIN VIG");
+    return;
+  }
+
+  let importedCount = 0;
+  let skippedCount = 0;
+  let invalidCount = 0;
+
+  dataRows.forEach((rowValues) => {
+    if (!Array.isArray(rowValues) || isImportedRowEmpty(rowValues, mapping)) {
+      skippedCount += 1;
+      return;
+    }
+
+    const rawBlockType = Number.isInteger(mapping.blockType) ? rowValues[mapping.blockType] : "";
+    const blockIndex = findTargetBlockIndex(rawBlockType);
+    if (blockIndex < 0) {
+      skippedCount += 1;
+      return;
+    }
+
+    const targetBlock = blocks[blockIndex];
+    const importedRow = newRowForBlock(targetBlock.blockType, currentCalendarContext);
+    importedRow.homeMonth = currentCalendarContext.month;
+    importedRow.homeYear = currentCalendarContext.year;
+
+    Object.keys(EXCEL_COLUMN_ALIASES).forEach((columnKey) => {
+      const sourceIndex = mapping[columnKey];
+      if (!Number.isInteger(sourceIndex)) {
+        return;
+      }
+
+      const normalizedValue = normalizeImportedCellValue(columnKey, rowValues[sourceIndex]);
+
+      if (DATE_COLUMNS.has(columnKey)) {
+        applyDateCellValue(importedRow, columnKey, normalizedValue);
+        return;
+      }
+
+      const parsedValue = parseCellValue(columnKey, normalizedValue);
+      importedRow[columnKey] = parsedValue;
+    });
+
+    const hasDateErrors = !!importedRow.startDateError || !!importedRow.endDateError || !!importedRow.dateRangeError;
+    if (hasDateErrors) {
+      invalidCount += 1;
+      return;
+    }
+
+    targetBlock.rows.push(importedRow);
+    importedCount += 1;
+  });
+
+  renderRows();
+
+  const summary = [`${importedCount} fila(s) importada(s)`];
+  if (invalidCount) {
+    summary.push(`${invalidCount} descartada(s) por fecha no válida`);
+  }
+  if (skippedCount) {
+    summary.push(`${skippedCount} vacía(s) o sin bloque destino`);
+  }
+  showGridToast(summary.join(" · "));
+}
+
+function handleExcelFileSelection(event) {
+  const input = event?.currentTarget;
+  const file = input?.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  if (!window.XLSX) {
+    showGridToast("No se pudo cargar la librería de Excel");
+    input.value = "";
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (loadEvent) => {
+    try {
+      const workbook = window.XLSX.read(loadEvent.target?.result, { type: "array", cellDates: false });
+      const firstSheetName = workbook.SheetNames?.[0];
+      const firstSheet = firstSheetName ? workbook.Sheets[firstSheetName] : null;
+      if (!firstSheet) {
+        showGridToast("No se encontró ninguna hoja en el archivo");
+        return;
+      }
+
+      const matrix = window.XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: true, defval: "" });
+      importRowsFromExcelMatrix(matrix);
+    } catch (error) {
+      showGridToast("No se pudo importar el Excel. Revisa el formato del archivo");
+    } finally {
+      input.value = "";
+    }
+  };
+
+  reader.onerror = () => {
+    showGridToast("No se pudo leer el archivo seleccionado");
+    input.value = "";
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+function attachExcelImportControls(root) {
+  const toolbarInner = root.querySelector(".panel-layout__toolbar-inner");
+  const importButton = root.querySelector(".import-excel-btn");
+  if (!toolbarInner || !importButton) {
+    return;
+  }
+
+  if (!ENABLE_EXCEL_IMPORT) {
+    importButton.disabled = true;
+    importButton.title = "Importación Excel desactivada por configuración";
+    return;
+  }
+
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = ".xlsx,.xls";
+  fileInput.className = "import-excel-input";
+  fileInput.style.display = "none";
+  fileInput.addEventListener("change", handleExcelFileSelection);
+  toolbarInner.appendChild(fileInput);
+
+  importButton.addEventListener("click", () => {
+    fileInput.click();
+  });
 }
 
 function parseISODateValue(value) {
@@ -3750,7 +3980,8 @@ function renderMonthBlockGrid(root) {
   document.addEventListener("pointercancel", handleGridPointerCancel);
   gridRoot?.addEventListener("click", handleGridClickCapture, true);
   ensureFillHandleElement();
-
+  attachExcelImportControls(root);
+  
   const rightBodyScroll = gridRoot?.querySelector("#right-body-scroll");
   rightBodyScroll?.addEventListener("scroll", () => {
     syncFillHandlePosition();
