@@ -3655,7 +3655,11 @@ function renderMonthBlockGrid(root) {
         </div>
       </div>
 
-      <div class="panel-layout__placeholder" aria-hidden="true"></div>
+      <div class="panel-layout__toolbar" aria-label="Acciones del panel">
+        <div class="panel-layout__toolbar-inner">
+          <button type="button" class="import-excel-btn">IMPORTAR EXCEL</button>
+        </div>
+      </div>
 
       <section class="month-block" aria-label="${monthAriaLabel}">
         <header class="month-block__header">
