@@ -160,18 +160,15 @@ function setAllBlocksCollapsed(collapsed) {
 function scrollToTopAfterGlobalCollapse(root) {
   const monthBodyWrapper = root?.querySelector(".month-block__body-scroll-wrapper");
   const rightBodyScroll = root?.querySelector("#right-body-scroll");
-  const bodyGrid = root?.querySelector(".month-block__body-grid");
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "auto" });
     monthBodyWrapper?.scrollTo({ top: 0, behavior: "auto" });
     rightBodyScroll?.scrollTo({ top: 0, behavior: "auto" });
-    bodyGrid?.scrollTo({ top: 0, behavior: "auto" });
   };
 
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(scrollToTop);
-  });
+  scrollToTop();
+  window.requestAnimationFrame(scrollToTop);
 }
 
 function updateGlobalCollapseButtonState() {
@@ -214,7 +211,6 @@ let blocks = [
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
 let selectedCell = null;
-let sortState = { key: null, dir: "asc" };
 let selectedCellState = null;
 let editingCell = null;
 let titleOverlayLayer = null;
@@ -1642,6 +1638,68 @@ function attachExcelImportControls(root) {
   });
 }
 
+function attachExcelExportControls(root) {
+  const exportWrapper = root.querySelector(".export-excel-wrapper");
+  const exportButton = root.querySelector(".export-excel-btn");
+  const exportMenu = root.querySelector("#export-excel-menu");
+  if (!exportWrapper || !exportButton || !exportMenu) {
+    return;
+  }
+
+  let isOpen = false;
+
+  const openMenu = () => {
+    isOpen = true;
+    exportMenu.classList.add("open");
+    exportButton.setAttribute("aria-expanded", "true");
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleMenuKeydown);
+  };
+
+  const closeMenu = () => {
+    isOpen = false;
+    exportMenu.classList.remove("open");
+    exportButton.setAttribute("aria-expanded", "false");
+    document.removeEventListener("mousedown", handleOutsideClick);
+    document.removeEventListener("keydown", handleMenuKeydown);
+  };
+
+  const handleOutsideClick = (event) => {
+    if (!exportWrapper.contains(event.target)) {
+      closeMenu();
+    }
+  };
+
+  const handleMenuKeydown = (event) => {
+    if (event.key === "Escape") {
+      closeMenu();
+      exportButton.focus();
+    }
+  };
+
+  exportButton.setAttribute("aria-haspopup", "true");
+  exportButton.setAttribute("aria-expanded", "false");
+
+  exportButton.addEventListener("click", () => {
+    if (isOpen) {
+      closeMenu();
+    } else {
+      openMenu();
+    }
+  });
+
+  exportMenu.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-export]");
+    if (!item) {
+      return;
+    }
+    const mode = item.dataset.export;
+    closeMenu();
+    showGridToast(`Exportar "${mode === "edicion" ? "Para Edición" : "Para Aplicativo"}" — funcionalidad próximamente`);
+  });
+}
+
+
 function parseISODateValue(value) {
   const normalized = `${value ?? ""}`.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
@@ -1712,13 +1770,6 @@ function intersectsVisibleMonth(rowRange, monthRange) {
   return rowRange.startDate <= monthRange.endDate && rowRange.endDate >= monthRange.startDate;
 }
 
-function getSortValue(row, key) {
-  if (key === "startDate") { return row.startDateISO || "\uffff"; }
-  if (key === "endDate")   { return row.endDateISO   || "\uffff"; }
-  if (key === "listo")     { return row.listo ? 0 : 1; }
-  return `${row[key] ?? ""}`.toLocaleLowerCase("es-ES");
-}
-
 function getOrderedRowsForMonth(block, calendarContext) {
   const getVisibleRowPriority = (item) => {
     if (item.isInheritedInMonth) {
@@ -1766,19 +1817,8 @@ function getOrderedRowsForMonth(block, calendarContext) {
 
   const orderedVisibleRows = [...visibleRows].sort((left, right) => {
     const priorityDelta = getVisibleRowPriority(left) - getVisibleRowPriority(right);
-if (priorityDelta !== 0 && (!sortState.key || getVisibleRowPriority(left) === 2 || getVisibleRowPriority(right) === 2)) {
-  return priorityDelta;
-}
-
-    if (sortState.key) {
-      const a = getSortValue(left.row, sortState.key);
-      const b = getSortValue(right.row, sortState.key);
-      const cmp = typeof a === "number" && typeof b === "number"
-        ? a - b
-        : `${a}`.localeCompare(`${b}`, "es-ES", { numeric: true });
-      if (cmp !== 0) {
-        return sortState.dir === "asc" ? cmp : -cmp;
-      }
+    if (priorityDelta !== 0) {
+      return priorityDelta;
     }
 
     return left.sourceIndex - right.sourceIndex;
@@ -4130,6 +4170,13 @@ function renderMonthBlockGrid(root) {
       <div class="panel-layout__toolbar" aria-label="Acciones del panel">
         <div class="panel-layout__toolbar-inner">
           <button type="button" class="import-excel-btn">IMPORTAR EXCEL</button>
+          <div class="export-excel-wrapper">
+            <button type="button" class="export-excel-btn">EXPORTAR EXCEL <span class="export-excel-btn__arrow">▾</span></button>
+            <div class="export-excel-menu" id="export-excel-menu" role="menu">
+              <button type="button" class="export-excel-menu__item" data-export="edicion" role="menuitem">Para Edición</button>
+              <button type="button" class="export-excel-menu__item" data-export="aplicativo" role="menuitem">Para Aplicativo</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -4169,36 +4216,11 @@ function renderMonthBlockGrid(root) {
 
   leftHeader.appendChild(globalCollapseButton);
 
-  headers.forEach((label, index) => {
-    const columnKey = columns[index].key;
+  headers.forEach((label) => {
     const cell = document.createElement("div");
-    cell.className = "left-header-sortable";
-    cell.dataset.sortKey = columnKey;
-    cell.title = `Ordenar por ${label}`;
-
-    const labelSpan = document.createElement("span");
-    labelSpan.textContent = label;
-    cell.appendChild(labelSpan);
-
-    const arrow = document.createElement("span");
-    arrow.className = "sort-arrow";
-    cell.appendChild(arrow);
-
-    cell.addEventListener("click", () => {
-      if (sortState.key === columnKey) {
-        sortState = sortState.dir === "asc"
-          ? { key: columnKey, dir: "desc" }
-          : { key: null, dir: "asc" };
-      } else {
-        sortState = { key: columnKey, dir: "asc" };
-      }
-      updateSortHeaderIndicators();
-      renderRows();
-    });
-
+    cell.textContent = label;
     leftHeader.appendChild(cell);
   });
-  updateSortHeaderIndicators();
   updateGlobalCollapseButtonState();
   
   const calendarContext = updateCalendarContext(root);
@@ -4223,6 +4245,7 @@ function renderMonthBlockGrid(root) {
   gridRoot?.addEventListener("click", handleGridClickCapture, true);
   ensureFillHandleElement();
   attachExcelImportControls(root);
+  attachExcelExportControls(root);
   
   const rightBodyScroll = gridRoot?.querySelector("#right-body-scroll");
   rightBodyScroll?.addEventListener("scroll", () => {
@@ -4232,20 +4255,6 @@ function renderMonthBlockGrid(root) {
   window.addEventListener("resize", () => {
     syncFillHandlePosition();
     syncCopyAntsPosition();
-  });
-}
-
-function updateSortHeaderIndicators() {
-  const leftHeader = document.getElementById("left-header");
-  if (!leftHeader) { return; }
-  leftHeader.querySelectorAll(".left-header-sortable").forEach((cell) => {
-    const key = cell.dataset.sortKey;
-    const arrow = cell.querySelector(".sort-arrow");
-    const isActive = sortState.key === key;
-    cell.classList.toggle("sort-active", isActive);
-    if (arrow) {
-      arrow.textContent = isActive ? (sortState.dir === "asc" ? " ↑" : " ↓") : "";
-    }
   });
 }
 
