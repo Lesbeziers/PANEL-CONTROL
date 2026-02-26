@@ -378,6 +378,30 @@ body {
   border-right: 2px solid var(--grid-border);
 }
 
+.left-header-sortable {
+  cursor: pointer;
+  user-select: none;
+  gap: 3px;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.left-header-sortable:hover {
+  background: #555555;
+  color: #ffffff;
+}
+
+.left-header-sortable.sort-active {
+  background: #111111;
+  color: #ffffff;
+}
+
+.sort-arrow {
+  font-size: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
 .left-row > div,
 .day-row .day-cell {
   height: var(--row-height);
