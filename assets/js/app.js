@@ -60,8 +60,8 @@ const EXCEL_BLOCK_HEADER_CANDIDATES = ["BLOQUE", "TIPO BLOQUE", "TIPO", "FORMATO
 const EXCEL_COLUMN_ALIASES = {
   listo: ["LISTO", "READY", "OK"],
   title: ["TÍTULO", "TITULO", "TITLE", "NOMBRE"],
-  startDate: ["INICIO VIG", "INICIO", "FECHA INICIO", "START", "START DATE"],
-  endDate: ["FIN VIG", "FIN", "FECHA FIN", "END", "END DATE"],
+  startDate: ["INICIO VIG", "INICIO VIG.", "INICIO VIGENCIA", "INICIO", "FECHA INICIO", "START", "START DATE"],
+  endDate: ["FIN VIG", "FIN VIG.", "FIN VIGENCIA", "FIN", "FECHA FIN", "END", "END DATE"],
   genre: ["GÉNERO", "GENERO", "GÉNERO/PROGRAMA", "GENRE"],
   id: ["ID", "CÓDIGO", "CODIGO", "IDENTIFICADOR"],
 };
@@ -1310,6 +1310,9 @@ function importRowsFromExcelMatrix(matrix) {
 
   const [headerRow, ...dataRows] = matrix;
   const mapping = mapExcelColumns(headerRow);
+  const hasTitleColumn = Number.isInteger(mapping.title);
+  const hasAtLeastOneDateColumn = Number.isInteger(mapping.startDate) || Number.isInteger(mapping.endDate);
+  if (!hasTitleColumn || !hasAtLeastOneDateColumn) {
   if (!Number.isInteger(mapping.title) || !Number.isInteger(mapping.startDate) || !Number.isInteger(mapping.endDate)) {
     showGridToast("Faltan columnas obligatorias: TÍTULO, INICIO VIG o FIN VIG");
     return;
