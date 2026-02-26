@@ -211,6 +211,7 @@ let blocks = [
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
 let selectedCell = null;
+let sortState = { key: null, dir: "asc" };
 let selectedCellState = null;
 let editingCell = null;
 let titleOverlayLayer = null;
@@ -1708,6 +1709,13 @@ function intersectsVisibleMonth(rowRange, monthRange) {
   return rowRange.startDate <= monthRange.endDate && rowRange.endDate >= monthRange.startDate;
 }
 
+function getSortValue(row, key) {
+  if (key === "startDate") { return row.startDateISO || "\uffff"; }
+  if (key === "endDate")   { return row.endDateISO   || "\uffff"; }
+  if (key === "listo")     { return row.listo ? 0 : 1; }
+  return `${row[key] ?? ""}`.toLocaleLowerCase("es-ES");
+}
+
 function getOrderedRowsForMonth(block, calendarContext) {
   const getVisibleRowPriority = (item) => {
     if (item.isInheritedInMonth) {
@@ -1757,6 +1765,17 @@ function getOrderedRowsForMonth(block, calendarContext) {
     const priorityDelta = getVisibleRowPriority(left) - getVisibleRowPriority(right);
     if (priorityDelta !== 0) {
       return priorityDelta;
+    }
+
+    if (sortState.key) {
+      const a = getSortValue(left.row, sortState.key);
+      const b = getSortValue(right.row, sortState.key);
+      const cmp = typeof a === "number" && typeof b === "number"
+        ? a - b
+        : `${a}`.localeCompare(`${b}`, "es-ES", { numeric: true });
+      if (cmp !== 0) {
+        return sortState.dir === "asc" ? cmp : -cmp;
+      }
     }
 
     return left.sourceIndex - right.sourceIndex;
@@ -4147,11 +4166,36 @@ function renderMonthBlockGrid(root) {
 
   leftHeader.appendChild(globalCollapseButton);
 
-  headers.forEach((label) => {
+  headers.forEach((label, index) => {
+    const columnKey = columns[index].key;
     const cell = document.createElement("div");
-    cell.textContent = label;
+    cell.className = "left-header-sortable";
+    cell.dataset.sortKey = columnKey;
+    cell.title = `Ordenar por ${label}`;
+
+    const labelSpan = document.createElement("span");
+    labelSpan.textContent = label;
+    cell.appendChild(labelSpan);
+
+    const arrow = document.createElement("span");
+    arrow.className = "sort-arrow";
+    cell.appendChild(arrow);
+
+    cell.addEventListener("click", () => {
+      if (sortState.key === columnKey) {
+        sortState = sortState.dir === "asc"
+          ? { key: columnKey, dir: "desc" }
+          : { key: null, dir: "asc" };
+      } else {
+        sortState = { key: columnKey, dir: "asc" };
+      }
+      updateSortHeaderIndicators();
+      renderRows();
+    });
+
     leftHeader.appendChild(cell);
   });
+  updateSortHeaderIndicators();
   updateGlobalCollapseButtonState();
   
   const calendarContext = updateCalendarContext(root);
@@ -4185,6 +4229,20 @@ function renderMonthBlockGrid(root) {
   window.addEventListener("resize", () => {
     syncFillHandlePosition();
     syncCopyAntsPosition();
+  });
+}
+
+function updateSortHeaderIndicators() {
+  const leftHeader = document.getElementById("left-header");
+  if (!leftHeader) { return; }
+  leftHeader.querySelectorAll(".left-header-sortable").forEach((cell) => {
+    const key = cell.dataset.sortKey;
+    const arrow = cell.querySelector(".sort-arrow");
+    const isActive = sortState.key === key;
+    cell.classList.toggle("sort-active", isActive);
+    if (arrow) {
+      arrow.textContent = isActive ? (sortState.dir === "asc" ? " ↑" : " ↓") : "";
+    }
   });
 }
 
