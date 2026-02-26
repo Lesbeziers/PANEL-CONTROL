@@ -1763,9 +1763,9 @@ function getOrderedRowsForMonth(block, calendarContext) {
 
   const orderedVisibleRows = [...visibleRows].sort((left, right) => {
     const priorityDelta = getVisibleRowPriority(left) - getVisibleRowPriority(right);
-    if (priorityDelta !== 0) {
-      return priorityDelta;
-    }
+if (priorityDelta !== 0 && (!sortState.key || getVisibleRowPriority(left) === 2 || getVisibleRowPriority(right) === 2)) {
+  return priorityDelta;
+}
 
     if (sortState.key) {
       const a = getSortValue(left.row, sortState.key);
