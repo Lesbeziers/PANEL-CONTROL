@@ -76,6 +76,7 @@
   --day-width: 20px;
   --month-grid-width: calc(930px + (31 * var(--day-width)));
   --month-body-scrollbar-space: 16px;
+  --month-body-bottom-space: 96px;
 }
 
 * {
@@ -227,6 +228,7 @@ body {
   overflow-x: hidden;
   scrollbar-gutter: stable;
   padding-right: var(--month-body-scrollbar-space);
+  padding-bottom: var(--month-body-bottom-space);
   background: #ffffff;
 }
 
