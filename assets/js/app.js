@@ -3194,8 +3194,21 @@ function openContextMenu(event, blockIndex, rowIndex) {
 
   const menu = ensureContextMenuElement();
   menu.classList.add("open");
-  menu.style.left = `${contextMenu.x}px`;
-  menu.style.top = `${contextMenu.y}px`;
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const EDGE_PADDING_PX = 8;
+
+  const menuRect = menu.getBoundingClientRect();
+  const maxLeft = Math.max(EDGE_PADDING_PX, viewportWidth - menuRect.width - EDGE_PADDING_PX);
+  const maxTop = Math.max(EDGE_PADDING_PX, viewportHeight - menuRect.height - EDGE_PADDING_PX);
+
+  const safeLeft = Math.min(contextMenu.x, maxLeft);
+  const safeTop = Math.min(contextMenu.y, maxTop);
+
+  menu.style.left = `${Math.max(EDGE_PADDING_PX, safeLeft)}px`;
+  menu.style.top = `${Math.max(EDGE_PADDING_PX, safeTop)}px`;
+
   updateContextMenuDeleteState();
   
   document.addEventListener("mousedown", handleOutsidePointer);
