@@ -160,15 +160,18 @@ function setAllBlocksCollapsed(collapsed) {
 function scrollToTopAfterGlobalCollapse(root) {
   const monthBodyWrapper = root?.querySelector(".month-block__body-scroll-wrapper");
   const rightBodyScroll = root?.querySelector("#right-body-scroll");
+  const bodyGrid = root?.querySelector(".month-block__body-grid");
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "auto" });
     monthBodyWrapper?.scrollTo({ top: 0, behavior: "auto" });
     rightBodyScroll?.scrollTo({ top: 0, behavior: "auto" });
+    bodyGrid?.scrollTo({ top: 0, behavior: "auto" });
   };
 
-  scrollToTop();
-  window.requestAnimationFrame(scrollToTop);
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(scrollToTop);
+  });
 }
 
 function updateGlobalCollapseButtonState() {
