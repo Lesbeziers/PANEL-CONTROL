@@ -14,7 +14,6 @@ const columns = [
   { key: "id", label: "ID", type: "text" },
 ];
 
-const headers = columns.map((column) => column.label);
 const MONTH_NAMES_ES = [
   "enero",
   "febrero",
@@ -178,13 +177,13 @@ let blocks = [
   createBlock({ id: "block-3", blockType: "Promo 40", headerColor: "#8fb596", maxSimultaneous: 5 }),
   createBlock({ id: "block-4", blockType: "Promo 40", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
   createBlock({ id: "block-5", blockType: "Otras Duraciones", headerColor: "#8fb596", maxSimultaneous: 5 }),
-  createBlock({ id: "block-6", blockType: "Otras duraciones", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
+  createBlock({ id: "block-6", blockType: "Otras Duraciones", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
   createBlock({ id: "block-7", blockType: "Combo", headerColor: "#8fb596", maxSimultaneous: 1 }),
   createBlock({ id: "block-8", blockType: "Bumper", headerColor: "#8fb596", maxSimultaneous: 8 }),
   createBlock({ id: "block-9", blockType: "Bumper", headerColor: "#e8cd8e", maxSimultaneous: 8 }),
   createBlock({ id: "block-10", blockType: "ID", headerColor: "#8fb596", maxSimultaneous: 1 }),
   createBlock({ id: "block-11", blockType: "Pasos a Publi", headerColor: "#8fb596", maxSimultaneous: 5 }),
-  createBlock({ id: "block-12", blockType: "pasos a Publi", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
+  createBlock({ id: "block-12", blockType: "Pasos a Publi", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
   createBlock({ id: "block-13", blockType: "Intruso", headerColor: "#8fb596", maxSimultaneous: 10 }),
   createBlock({ id: "block-14", blockType: "Loop protección Pop-Ups", headerColor: "#8fb596", maxSimultaneous: null }),
   createSeparatorBlock({ id: "separator-1", label: "OTROS CANALES" }),
@@ -241,15 +240,8 @@ let pendingHistoryCommitTimer = null;
 let activeHistoryAction = null;
 let isApplyingHistory = false;
 
-
-function cloneRowData(row) {
-  return {
-    ...row,
-  };
-}
-
 function cloneRows(rows) {
-  return Array.isArray(rows) ? rows.map((row) => cloneRowData(row)) : [];
+  return Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
 }
 
 function getCellByMeta(meta) {
@@ -589,12 +581,6 @@ function resolveCalendarContextFromTitle(titleText) {
     year,
     daysInMonth: daysInMonth(month, year),
   };
-}
-
-function updateCalendarContext(root = document) {
-  const titleElement = root.querySelector?.(".panel-layout__month-title");
-  currentCalendarContext = resolveCalendarContextFromTitle(titleElement?.textContent);
-  return currentCalendarContext;
 }
 
 function applyCalendarContextToView(root = document) {
@@ -1353,31 +1339,6 @@ function getOrderedRowsForMonth(block, calendarContext) {
   }];
 }
 
-function getBlockDailyCounts(block, calendarContext) {
-  const counts = new Array(32).fill(0);
-  const orderedRows = getOrderedRowsForMonth(block, calendarContext);
-  const monthStart = new Date(calendarContext.year, calendarContext.month - 1, 1);
-  const monthEnd = new Date(calendarContext.year, calendarContext.month, 0);
-
-  orderedRows.forEach(({ rowRange }) => {
-    if (!rowRange) {
-      return;
-    }
-
-    const visibleStart = rowRange.startDate < monthStart ? monthStart : rowRange.startDate;
-    const visibleEnd = rowRange.endDate > monthEnd ? monthEnd : rowRange.endDate;
-    if (visibleEnd < visibleStart) {
-      return;
-    }
-
-    for (let day = visibleStart.getDate(); day <= visibleEnd.getDate(); day += 1) {
-      counts[day] += 1;
-    }
-  });
-
-  return counts;
-}
-
 function parseDateInput(
   text,
   defaultMonth = currentCalendarContext.month,
@@ -1459,14 +1420,6 @@ function validateRowDateRange(row, { notify = false } = {}) {
 
   row.dateRangeError = null;
   return { ok: true, error: null };
-}
-
-function validateAllRowsDateRanges() {
-  blocks.forEach((block) => {
-    block.rows.forEach((row) => {
-      validateRowDateRange(row);
-    });
-  });
 }
 
 function applyDateCellValue(row, columnKey, rawValue, { preserveRawOnInvalid = true } = {}) {
