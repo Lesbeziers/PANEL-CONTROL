@@ -1232,6 +1232,13 @@ function normalizeHeaderToken(value) {
     .toUpperCase();
 }
 
+function normalizeBlockToken(value) {
+  return normalizeHeaderToken(value)
+    .replace(/[^A-Z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function findExcelHeaderMatch(sourceHeader, candidates) {
   const normalizedSource = normalizeHeaderToken(sourceHeader);
   return candidates.some((candidate) => normalizedSource === normalizeHeaderToken(candidate));
@@ -1294,12 +1301,76 @@ function isImportedRowEmpty(rowValues, mapping) {
 }
 
 function findTargetBlockIndex(rawBlockType) {
-  const normalizedBlock = normalizeHeaderToken(rawBlockType);
+  const normalizedBlock = normalizeBlockToken(rawBlockType);
   if (!normalizedBlock) {
     return blocks.findIndex((block) => !block.isSeparator);
   }
 
-  return blocks.findIndex((block) => !block.isSeparator && normalizeHeaderToken(block.blockType) === normalizedBlock);
+  const exactMatchIndex = blocks.findIndex(
+    (block) => !block.isSeparator && normalizeBlockToken(block.blockType) === normalizedBlock
+  );
+
+  if (exactMatchIndex >= 0) {
+    return exactMatchIndex;
+  }
+
+  return blocks.findIndex((block) => {
+    if (block.isSeparator) {
+      return false;
+    }
+
+    const candidate = normalizeBlockToken(block.blockType);
+    return candidate.includes(normalizedBlock) || normalizedBlock.includes(candidate);
+  });
+}
+
+function findExcelHeaderRow(matrix) {
+  if (!Array.isArray(matrix)) {
+    return { headerRowIndex: -1, headerRow: [] };
+  }
+
+  for (let index = 0; index < matrix.length; index += 1) {
+    const row = Array.isArray(matrix[index]) ? matrix[index] : [];
+    const mapping = mapExcelColumns(row);
+    const hasTitleColumn = Number.isInteger(mapping.title);
+    const hasAtLeastOneDateColumn = Number.isInteger(mapping.startDate) || Number.isInteger(mapping.endDate);
+    if (hasTitleColumn && hasAtLeastOneDateColumn) {
+      return { headerRowIndex: index, headerRow: row };
+    }
+  }
+
+  return { headerRowIndex: -1, headerRow: [] };
+}
+
+function inferIdColumnIndexFromHeader(headerRow, mapping) {
+  if (Number.isInteger(mapping.id) || !Number.isInteger(mapping.genre)) {
+    return mapping.id;
+  }
+
+  const nextIndex = mapping.genre + 1;
+  const rawHeader = `${headerRow[nextIndex] ?? ""}`.trim();
+  return rawHeader ? mapping.id : nextIndex;
+}
+
+function isExcelTemplateBlockHeader(rowValues, mapping) {
+  const blockCellIndex = Number.isInteger(mapping.blockType)
+    ? mapping.blockType
+    : (Number.isInteger(mapping.listo) ? mapping.listo : 0);
+  const candidateLabel = `${rowValues[blockCellIndex] ?? ""}`.trim();
+  if (!candidateLabel) {
+    return false;
+  }
+
+  const hasDataInMainColumns = ["title", "startDate", "endDate", "genre", "id"].some((key) => {
+    const index = mapping[key];
+    if (!Number.isInteger(index)) {
+      return false;
+    }
+
+    return !!`${rowValues[index] ?? ""}`.trim();
+  });
+
+  return !hasDataInMainColumns;
 }
 
 function importRowsFromExcelMatrix(matrix) {
@@ -1308,8 +1379,16 @@ function importRowsFromExcelMatrix(matrix) {
     return;
   }
 
-  const [headerRow, ...dataRows] = matrix;
+  const { headerRowIndex, headerRow } = findExcelHeaderRow(matrix);
+  if (headerRowIndex < 0) {
+    showGridToast("Faltan columnas obligatorias: TÍTULO, INICIO VIG o FIN VIG");
+    return;
+  }
+
+  const dataRows = matrix.slice(headerRowIndex + 1);
   const mapping = mapExcelColumns(headerRow);
+  mapping.id = inferIdColumnIndexFromHeader(headerRow, mapping);
+
   const hasTitleColumn = Number.isInteger(mapping.title);
   const hasAtLeastOneDateColumn = Number.isInteger(mapping.startDate) || Number.isInteger(mapping.endDate);
   if (!hasTitleColumn || !hasAtLeastOneDateColumn) {
@@ -1320,16 +1399,29 @@ function importRowsFromExcelMatrix(matrix) {
   let importedCount = 0;
   let skippedCount = 0;
   let invalidCount = 0;
-
+  let currentBlockIndex = blocks.findIndex((block) => !block.isSeparator);
+  
   dataRows.forEach((rowValues) => {
     if (!Array.isArray(rowValues) || isImportedRowEmpty(rowValues, mapping)) {
       skippedCount += 1;
       return;
     }
 
+    if (isExcelTemplateBlockHeader(rowValues, mapping)) {
+      const rawBlockType = Number.isInteger(mapping.blockType)
+        ? rowValues[mapping.blockType]
+        : rowValues[Number.isInteger(mapping.listo) ? mapping.listo : 0];
+      const resolvedBlockIndex = findTargetBlockIndex(rawBlockType);
+      if (resolvedBlockIndex >= 0) {
+        currentBlockIndex = resolvedBlockIndex;
+      }
+      skippedCount += 1;
+      return;
+    }
+
     const rawBlockType = Number.isInteger(mapping.blockType) ? rowValues[mapping.blockType] : "";
-    const blockIndex = findTargetBlockIndex(rawBlockType);
-    if (blockIndex < 0) {
+    const blockIndex = `${rawBlockType ?? ""}`.trim() ? findTargetBlockIndex(rawBlockType) : currentBlockIndex;
+    if (!Number.isInteger(blockIndex) || blockIndex < 0) {
       skippedCount += 1;
       return;
     }
