@@ -1313,7 +1313,6 @@ function importRowsFromExcelMatrix(matrix) {
   const hasTitleColumn = Number.isInteger(mapping.title);
   const hasAtLeastOneDateColumn = Number.isInteger(mapping.startDate) || Number.isInteger(mapping.endDate);
   if (!hasTitleColumn || !hasAtLeastOneDateColumn) {
-  if (!Number.isInteger(mapping.title) || !Number.isInteger(mapping.startDate) || !Number.isInteger(mapping.endDate)) {
     showGridToast("Faltan columnas obligatorias: TÍTULO, INICIO VIG o FIN VIG");
     return;
   }
