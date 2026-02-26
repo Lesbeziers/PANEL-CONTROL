@@ -146,20 +146,6 @@ function setAllBlocksCollapsed(collapsed) {
   blocks = blocks.map((block) => (block.isSeparator ? block : { ...block, collapsed }));
 }
 
-function scrollToTopAfterGlobalCollapse(root) {
-  const monthBodyWrapper = root?.querySelector(".month-block__body-scroll-wrapper");
-  const rightBodyScroll = root?.querySelector("#right-body-scroll");
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "auto" });
-    monthBodyWrapper?.scrollTo({ top: 0, behavior: "auto" });
-    rightBodyScroll?.scrollTo({ top: 0, behavior: "auto" });
-  };
-
-  scrollToTop();
-  window.requestAnimationFrame(scrollToTop);
-}
-
 function updateGlobalCollapseButtonState() {
   const button = document.getElementById(GLOBAL_COLLAPSE_BUTTON_ID);
   if (!button) {
@@ -3655,11 +3641,7 @@ function renderMonthBlockGrid(root) {
         </div>
       </div>
 
-      <div class="panel-layout__toolbar" aria-label="Acciones del panel">
-        <div class="panel-layout__toolbar-inner">
-          <button type="button" class="import-excel-btn">IMPORTAR EXCEL</button>
-        </div>
-      </div>
+      <div class="panel-layout__placeholder" aria-hidden="true"></div>
 
       <section class="month-block" aria-label="${monthAriaLabel}">
         <header class="month-block__header">
@@ -3692,7 +3674,6 @@ function renderMonthBlockGrid(root) {
     const allCollapsed = areAllBlocksCollapsed();
     setAllBlocksCollapsed(!allCollapsed);
     renderRows();
-    scrollToTopAfterGlobalCollapse(root);
   });
 
   leftHeader.appendChild(globalCollapseButton);
