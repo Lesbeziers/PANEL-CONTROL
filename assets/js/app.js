@@ -2620,29 +2620,50 @@ function handleGridPaste(event) {
       return;
     }
 
-    if (clipboardRows.length > 1) {
-      const availableRows = Math.max(0, block.rows.length - startMeta.rowIndex);
-      const missingRows = Math.max(0, clipboardRows.length - availableRows);
+    const orderedRows = getOrderedRowsForMonth(block, currentCalendarContext);
+    const anchorRowId = selectedCell?.dataset?.rowId || null;
+    let anchorVisibleIndex = orderedRows.findIndex((item) => item.row?.rowKey === anchorRowId);
+    if (anchorVisibleIndex < 0) {
+      anchorVisibleIndex = orderedRows.findIndex((item) => item.sourceIndex === startMeta.rowIndex);
+    }
+    if (anchorVisibleIndex < 0) {
+      anchorVisibleIndex = 0;
+    }
+
+    let targetRowKeys = orderedRows
+      .slice(anchorVisibleIndex)
+      .map((item) => item.row?.rowKey)
+      .filter(Boolean);
+
+    if (clipboardRows.length > targetRowKeys.length) {
+      const missingRows = clipboardRows.length - targetRowKeys.length;
       const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
       if (rowsToInsert > 0) {
         insertRows(startMeta.blockIndex, block.rows.length, rowsToInsert, { historyType: "paste" });
-
+        const currentBlock = blocks[startMeta.blockIndex];
+        const newRows = currentBlock?.rows?.slice(-rowsToInsert) || [];
+        targetRowKeys = targetRowKeys.concat(newRows.map((row) => row?.rowKey).filter(Boolean));
+        
         if (missingRows > MAX_AUTO_INSERT) {
           showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
         }
       }
     }
 
-    const currentBlock = blocks[startMeta.blockIndex];
-    const availableRowsAfterInsert = Math.max(0, (currentBlock?.rows?.length || 0) - startMeta.rowIndex);
     const maxPasteRows = clipboardRows.length > 1
-      ? Math.min(clipboardRows.length, availableRowsAfterInsert)
+      ? Math.min(clipboardRows.length, targetRowKeys.length)
       : 1;
 
     for (let offset = 0; offset < maxPasteRows; offset += 1) {
       const line = clipboardRows[offset];
+      const rowKey = targetRowKeys[offset];
+      const targetMeta = getCellMetaFromRowKey(rowKey, startMeta.columnKey);
+      if (!targetMeta) {
+        continue;
+      }
+
       const targetCell = document.querySelector(
-        `[data-block-index="${startMeta.blockIndex}"][data-row-index="${startMeta.rowIndex + offset}"][data-column-key="${startMeta.columnKey}"]`
+        `[data-block-index="${targetMeta.blockIndex}"][data-row-index="${targetMeta.rowIndex}"][data-column-key="${targetMeta.columnKey}"]`
       );
       if (targetCell) {
         setCellValue(targetCell, line, { type: "paste", groupKey: "paste" });
@@ -2652,9 +2673,13 @@ function handleGridPaste(event) {
     renderRows();
 
     if (DATE_COLUMNS.has(startMeta.columnKey)) {
-      const finalCell = document.querySelector(
-        `[data-block-index="${startMeta.blockIndex}"][data-row-index="${Math.min(startMeta.rowIndex + maxPasteRows - 1, blocks[startMeta.blockIndex].rows.length - 1)}"][data-column-key="${startMeta.columnKey}"]`
-      );
+      const lastRowKey = maxPasteRows > 0 ? targetRowKeys[maxPasteRows - 1] : null;
+      const finalMeta = getCellMetaFromRowKey(lastRowKey, startMeta.columnKey);
+      const finalCell = finalMeta
+        ? document.querySelector(
+          `[data-block-index="${finalMeta.blockIndex}"][data-row-index="${finalMeta.rowIndex}"][data-column-key="${finalMeta.columnKey}"]`
+        )
+        : null;
       if (finalCell) {
         setSelectedCell(finalCell);
         focusCellWithoutEditing(finalCell);
