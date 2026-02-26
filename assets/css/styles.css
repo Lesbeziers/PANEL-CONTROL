@@ -174,12 +174,41 @@ body {
   outline-offset: 2px;
 }
 
-.panel-layout__placeholder {
+.panel-layout__toolbar {
   flex: 0 0 auto;
   min-height: 44px;
   background: #ffffff;
 }
 
+.panel-layout__toolbar-inner {
+  width: var(--month-grid-width);
+  margin: 0 auto;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.import-excel-btn {
+  appearance: none;
+  border: 1px solid #333333;
+  background: #ffffff;
+  color: #333333;
+  font-family: inherit;
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+  padding: 6px 28px;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.import-excel-btn:hover,
+.import-excel-btn:focus-visible {
+  border-color: #333333;
+  background: #333333;
+  color: #ffffff;
+}
 
 .panel-layout__section-separator {
   flex: 0 0 auto;
