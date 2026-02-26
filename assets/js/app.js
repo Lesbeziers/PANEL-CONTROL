@@ -1228,6 +1228,8 @@ function normalizeHeaderToken(value) {
   return `${value ?? ""}`
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
 }
@@ -1241,7 +1243,24 @@ function normalizeBlockToken(value) {
 
 function findExcelHeaderMatch(sourceHeader, candidates) {
   const normalizedSource = normalizeHeaderToken(sourceHeader);
-  return candidates.some((candidate) => normalizedSource === normalizeHeaderToken(candidate));
+  if (!normalizedSource) {
+    return false;
+  }
+
+  return candidates.some((candidate) => {
+    const normalizedCandidate = normalizeHeaderToken(candidate);
+    if (!normalizedCandidate) {
+      return false;
+    }
+
+    if (normalizedSource === normalizedCandidate) {
+      return true;
+    }
+
+    return normalizedSource.startsWith(`${normalizedCandidate} `)
+      || normalizedSource.endsWith(` ${normalizedCandidate}`)
+      || normalizedSource.includes(` ${normalizedCandidate} `);
+  });
 }
 
 function mapExcelColumns(headerRow) {
