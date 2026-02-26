@@ -1319,28 +1319,65 @@ function isImportedRowEmpty(rowValues, mapping) {
   });
 }
 
-function findTargetBlockIndex(rawBlockType) {
+function blockTypeMatchesNormalized(candidate, normalizedBlock) {
+  if (candidate === normalizedBlock) {
+    return true;
+  }
+
+  // Word-overlap fuzzy match: at least 60% of the shorter set of words must match.
+  // This prevents short names like "LOOP" from matching "LOOPS PROTECCION POP UPS".
+  const srcWords = normalizedBlock.split(" ");
+  const candWords = candidate.split(" ");
+  const srcSet = new Set(srcWords);
+  const candSet = new Set(candWords);
+  const matchCount = candWords.filter((w) => srcSet.has(w)).length
+    + srcWords.filter((w) => candSet.has(w)).length;
+  const minWords = Math.min(srcWords.length, candWords.length);
+  return matchCount >= Math.ceil(minWords * 1.2);
+}
+
+function findTargetBlockIndex(rawBlockType, occurrence = 1) {
   const normalizedBlock = normalizeBlockToken(rawBlockType);
   if (!normalizedBlock) {
     return blocks.findIndex((block) => !block.isSeparator);
   }
 
-  const exactMatchIndex = blocks.findIndex(
-    (block) => !block.isSeparator && normalizeBlockToken(block.blockType) === normalizedBlock
-  );
-
-  if (exactMatchIndex >= 0) {
-    return exactMatchIndex;
+  // Find the Nth (1-based) block whose normalized type matches.
+  // First pass: exact matches.
+  let count = 0;
+  let lastExact = -1;
+  for (let i = 0; i < blocks.length; i += 1) {
+    if (blocks[i].isSeparator) {
+      continue;
+    }
+    if (normalizeBlockToken(blocks[i].blockType) === normalizedBlock) {
+      count += 1;
+      lastExact = i;
+      if (count === occurrence) {
+        return i;
+      }
+    }
+  }
+  if (lastExact >= 0) {
+    return lastExact;
   }
 
-  return blocks.findIndex((block) => {
-    if (block.isSeparator) {
-      return false;
+  // Second pass: word-overlap fuzzy matches.
+  count = 0;
+  let lastFuzzy = -1;
+  for (let i = 0; i < blocks.length; i += 1) {
+    if (blocks[i].isSeparator) {
+      continue;
     }
-
-    const candidate = normalizeBlockToken(block.blockType);
-    return candidate.includes(normalizedBlock) || normalizedBlock.includes(candidate);
-  });
+    if (blockTypeMatchesNormalized(normalizeBlockToken(blocks[i].blockType), normalizedBlock)) {
+      count += 1;
+      lastFuzzy = i;
+      if (count === occurrence) {
+        return i;
+      }
+    }
+  }
+  return lastFuzzy;
 }
 
 function findExcelHeaderRow(matrix) {
@@ -1419,7 +1456,11 @@ function importRowsFromExcelMatrix(matrix) {
   let skippedCount = 0;
   let invalidCount = 0;
   let currentBlockIndex = blocks.findIndex((block) => !block.isSeparator);
-  
+
+  // Track how many times each normalized block type name has appeared as a header
+  // so that the 2nd "PROMO 20" header maps to the 2nd "Promo 20" block, etc.
+  const blockTypeOccurrenceCount = {};
+
   dataRows.forEach((rowValues) => {
     if (!Array.isArray(rowValues) || isImportedRowEmpty(rowValues, mapping)) {
       skippedCount += 1;
@@ -1430,7 +1471,10 @@ function importRowsFromExcelMatrix(matrix) {
       const rawBlockType = Number.isInteger(mapping.blockType)
         ? rowValues[mapping.blockType]
         : rowValues[Number.isInteger(mapping.listo) ? mapping.listo : 0];
-      const resolvedBlockIndex = findTargetBlockIndex(rawBlockType);
+      const normalizedRaw = normalizeBlockToken(rawBlockType);
+      blockTypeOccurrenceCount[normalizedRaw] = (blockTypeOccurrenceCount[normalizedRaw] || 0) + 1;
+      const occurrence = blockTypeOccurrenceCount[normalizedRaw];
+      const resolvedBlockIndex = findTargetBlockIndex(rawBlockType, occurrence);
       if (resolvedBlockIndex >= 0) {
         currentBlockIndex = resolvedBlockIndex;
       }
@@ -1489,6 +1533,33 @@ function importRowsFromExcelMatrix(matrix) {
   showGridToast(summary.join(" · "));
 }
 
+function resolveContextFromSheetName(sheetName) {
+  const normalized = `${sheetName ?? ""}`.trim();
+  // Accept 3 or 4-digit years to handle typos like "FEBRERO 206" instead of "FEBRERO 2026"
+  const match = normalized.match(/^([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)\s+(\d{3,4})$/u);
+  if (!match) {
+    return null;
+  }
+
+  const monthLabel = normalizeMonthLabel(match[1]);
+  const month = MONTH_LABEL_TO_NUMBER[monthLabel];
+  if (!Number.isInteger(month)) {
+    return null;
+  }
+
+  let year = Number.parseInt(match[2], 10);
+  if (year < 1000) {
+    // 3-digit year is a typo (e.g. "206" → 2026): fall back to current year
+    year = new Date().getFullYear();
+  }
+
+  return {
+    month,
+    year,
+    daysInMonth: new Date(year, month, 0).getDate(),
+  };
+}
+
 function handleExcelFileSelection(event) {
   const input = event?.currentTarget;
   const file = input?.files?.[0];
@@ -1506,15 +1577,26 @@ function handleExcelFileSelection(event) {
   reader.onload = (loadEvent) => {
     try {
       const workbook = window.XLSX.read(loadEvent.target?.result, { type: "array", cellDates: false });
-      const firstSheetName = workbook.SheetNames?.[0];
-      const firstSheet = firstSheetName ? workbook.Sheets[firstSheetName] : null;
-      if (!firstSheet) {
+      const sheetsWithData = workbook.SheetNames.filter((name) => workbook.Sheets[name]);
+      if (!sheetsWithData.length) {
         showGridToast("No se encontró ninguna hoja en el archivo");
         return;
       }
 
-      const matrix = window.XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: true, defval: "" });
-      importRowsFromExcelMatrix(matrix);
+      const savedContext = currentCalendarContext;
+      let totalImported = 0;
+
+      sheetsWithData.forEach((sheetName) => {
+        const sheet = workbook.Sheets[sheetName];
+        const matrix = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
+        const sheetContext = resolveContextFromSheetName(sheetName);
+        if (sheetContext) {
+          currentCalendarContext = sheetContext;
+        }
+        importRowsFromExcelMatrix(matrix);
+      });
+
+      currentCalendarContext = savedContext;
     } catch (error) {
       showGridToast("No se pudo importar el Excel. Revisa el formato del archivo");
     } finally {
