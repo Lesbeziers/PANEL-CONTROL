@@ -2527,6 +2527,8 @@ function handleGridPaste(event) {
 
   const hasVerticalRangeSelection =
     !!dragSelection
+    && dragSelection.blockIndex === Number.parseInt(selectedCell.dataset.blockIndex, 10)
+    && dragSelection.col === selectedCell.dataset.columnKey
     && dragSelection.r2 > dragSelection.r1;
 
   const isEditorActive = isEditingElement(document.activeElement);
