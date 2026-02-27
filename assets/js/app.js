@@ -252,7 +252,8 @@ let pendingHistoryAction = null;
 let pendingHistoryCommitTimer = null;
 let activeHistoryAction = null;
 let isApplyingHistory = false;
-
+let searchQuery = "";
+let preSearchCollapseState = null;
 
 function cloneRowData(row) {
   return {
@@ -2000,6 +2001,69 @@ function getRowRange(row) {
   }
 
   return { startDate, endDate };
+}
+
+function normalizeForSearch(text) {
+  return `${text ?? ""}`
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+}
+
+function rowMatchesSearch(row, normalizedQuery) {
+  if (!normalizedQuery) return true;
+  return normalizeForSearch(row.title).includes(normalizedQuery);
+}
+
+function blockHasMatchForSearch(block, normalizedQuery) {
+  if (!normalizedQuery || block.isSeparator) return true;
+  return block.rows.some(
+    (row) => !isPlaceholderRow(row) && rowMatchesSearch(row, normalizedQuery)
+  );
+}
+
+function applySearch(rawQuery) {
+  const normalized = normalizeForSearch(rawQuery);
+
+  if (normalized && !preSearchCollapseState) {
+    preSearchCollapseState = new Map(blocks.map((b) => [b.id, b.collapsed]));
+  }
+
+  if (normalized) {
+    blocks = blocks.map((block) => {
+      if (block.isSeparator) return block;
+      const hasMatch = blockHasMatchForSearch(block, normalized);
+      return { ...block, collapsed: !hasMatch };
+    });
+  } else if (preSearchCollapseState) {
+    blocks = blocks.map((block) => ({
+      ...block,
+      collapsed: preSearchCollapseState.get(block.id) ?? block.collapsed,
+    }));
+    preSearchCollapseState = null;
+  }
+
+  searchQuery = normalized;
+  renderRows();
+}
+
+function attachSearchControls(root) {
+  const wrapper = root.querySelector(".search-box-wrapper");
+  const input   = root.querySelector(".search-box-input");
+  const clearBtn = root.querySelector(".search-box-clear");
+  if (!input) return;
+
+  input.addEventListener("input", () => {
+    wrapper?.classList.toggle("has-value", !!input.value);
+    applySearch(input.value);
+  });
+
+  clearBtn?.addEventListener("click", () => {
+    input.value = "";
+    wrapper?.classList.remove("has-value");
+    applySearch("");
+    input.focus();
+  });
 }
 
 function isPlaceholderRow(row) {
@@ -4462,6 +4526,11 @@ function renderMonthBlockGrid(root) {
               <button type="button" class="export-excel-menu__item" data-export="aplicativo" role="menuitem">Para Aplicativo</button>
             </div>
           </div>
+          <div class="search-box-wrapper">
+            <span class="search-box-icon" aria-hidden="true">⌕</span>
+            <input type="text" class="search-box-input" placeholder="Buscar título..." autocomplete="off" aria-label="Buscar en el panel" />
+            <button type="button" class="search-box-clear" aria-label="Limpiar búsqueda">✕</button>
+          </div>
         </div>
       </div>
 
@@ -4556,6 +4625,7 @@ function renderMonthBlockGrid(root) {
   ensureFillHandleElement();
   attachExcelImportControls(root);
   attachExcelExportControls(root);
+  attachSearchControls(root);
   
   const rightBodyScroll = gridRoot?.querySelector("#right-body-scroll");
   rightBodyScroll?.addEventListener("scroll", () => {
@@ -4584,6 +4654,8 @@ function updateSortHeaderIndicators() {
 
 function renderRows() {
   updateCalendarContext(document);
+  document.querySelector(".panel-layout")
+    ?.classList.toggle("search-is-active", !!searchQuery);
   validateAllRowsDateRanges();
   const leftBody = document.getElementById("left-body");
   const rightBody = document.getElementById("right-body");
@@ -4632,6 +4704,11 @@ function renderRows() {
     }
 
         attachBlockListoCheckbox(groupLeftRow.children[1], block);
+
+if (searchQuery && !blockHasMatchForSearch(block, searchQuery)) {
+      groupLeftRow.classList.add("is-search-dim");
+      groupDayRow.classList.add("is-search-dim");
+    }
 
     leftBody.appendChild(groupLeftRow);
     rightBody.appendChild(groupDayRow);
@@ -4710,8 +4787,13 @@ function renderRows() {
         selectedCell.classList.add("is-selected");
       }
 
-      leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, sourceIndex));
+leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, sourceIndex));
       dayRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockIndex, sourceIndex));
+
+      if (searchQuery && !rowMatchesSearch(row, searchQuery)) {
+        leftRow.classList.add("is-search-dim");
+        dayRow.classList.add("is-search-dim");
+      }
 
       leftBody.appendChild(leftRow);
       rightBody.appendChild(dayRow);
