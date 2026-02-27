@@ -1771,52 +1771,41 @@ async function exportExcelAplicativo() {
     return;
   }
 
-  // Mapa blockType → valor "tipo" para el aplicativo
   const TIPO_MAP = {
-    "promo 20":                    "Promo",
-    "promo 40":                    "Promo",
-    "otras duraciones":            "Otras Duraciones",
-    "combo":                       "Combo",
-    "bumper":                      "Bumper",
-    "id":                          "ID",
-    "pasos a publi":               "Paso a Publi",
-    "intruso":                     "Intruso",
-    "loop protección pop-ups":     "Loop",
-    "loop proteccion pop-ups":     "Loop",
-    "canales laliga":              "Canal LaLiga",
-    "canales golf":                "Canal Golf",
-    "canales caza y pesca":        "Canal Caza y Pesca",
-    "arranque":                    "Arranque",
-    "loop":                        "Loop",
-    "pre roll":                    "Preroll",
+    "promo 20":                   "Promo",
+    "promo 40":                   "Promo",
+    "otras duraciones":           "Otras Duraciones",
+    "combo":                      "Combo",
+    "bumper":                     "Bumper",
+    "id":                         "ID",
+    "pasos a publi":              "Paso a Publi",
+    "intruso":                    "Intruso",
+    "loop proteccion pop-ups":    "Loop",
+    "loop protección pop-ups":    "Loop",
+    "canales laliga":             "Canal LaLiga",
+    "canales golf":               "Canal Golf",
+    "canales caza y pesca":       "Canal Caza y Pesca",
+    "arranque":                   "Arranque",
+    "loop":                       "Loop",
+    "pre roll":                   "Preroll",
   };
 
   function getTipo(blockType) {
-    const key = (blockType || "").toLowerCase()
-      .normalize("NFD").replace(/\p{Diacritic}/gu, "")
-      .replace("proteccion", "protección");
+    const key = (blockType || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "");
     return TIPO_MAP[key] || blockType;
   }
 
-  // Mapa colores UI → ARGB Excel
-  const HEADER_COLOR_MAP = {
-    "#8fb596": "FF70AD47",
-    "#e8cd8e": "FFFFC000",
-  };
-  const COLOR_RED_SEP  = "FFC00000";
   const COLOR_BLUE_HDR = "FF4472C4";
   const COLOR_WHITE    = "FFFFFFFF";
 
-  function toArgb(hexColor) {
-    return HEADER_COLOR_MAP[hexColor?.toLowerCase()] || "FFD9D9D9";
-  }
-
-  function applyFill(cell, bgArgb) {
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgArgb } };
+  function applyBlueHeader(cell) {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_BLUE_HDR } };
     cell.font = { bold: true, color: { argb: COLOR_WHITE } };
   }
 
-  // Definición de las 29 columnas — hidden=true reproduce columnas ocultas del original
   const COL_DEFS = [
     { header: "titulo",                    width: 60,  hidden: false },
     { header: "fecha_entrega",             width: 14,  hidden: false },
@@ -1848,8 +1837,6 @@ async function exportExcelAplicativo() {
     { header: "notas",                     width: 24,  hidden: true  },
     { header: "genero",                    width: 14,  hidden: false },
   ];
-  const TOTAL_COLS = COL_DEFS.length; // 29
-  const LAST_COL_LETTER = "AC";
 
   const { month, year } = currentCalendarContext;
 
@@ -1859,41 +1846,18 @@ async function exportExcelAplicativo() {
   // Anchos y columnas ocultas
   ws.columns = COL_DEFS.map((col) => ({ width: col.width }));
   COL_DEFS.forEach((col, i) => {
-    if (col.hidden) {
-      ws.getColumn(i + 1).hidden = true;
-    }
+    if (col.hidden) ws.getColumn(i + 1).hidden = true;
   });
 
-  // — Fila de cabecera principal (azul) —
+  // Fila de cabecera azul
   const headerRow = ws.addRow(COL_DEFS.map((col) => col.header));
-  headerRow.eachCell((cell) => applyFill(cell, COLOR_BLUE_HDR));
+  headerRow.eachCell((cell) => applyBlueHeader(cell));
   headerRow.commit();
 
-  // — Bloques —
+  // Todas las filas de datos del mes, sin separadores de bloque
   blocks.forEach((block) => {
-    if (block.isSeparator) {
-      const blockLabel = block.blockType.toUpperCase();
-      const isRedSep   = blockLabel === "OTROS CANALES" || blockLabel === "VOD";
-      const bgArgb     = isRedSep ? COLOR_RED_SEP : toArgb(block.headerColor);
+    if (block.isSeparator) return;
 
-      const sepRow = ws.addRow([blockLabel, ...Array(TOTAL_COLS - 1).fill(null)]);
-      const rowNum = sepRow.number;
-      ws.mergeCells(`A${rowNum}:${LAST_COL_LETTER}${rowNum}`);
-      applyFill(sepRow.getCell(1), bgArgb);
-      sepRow.commit();
-      return;
-    }
-
-    const bgArgb     = toArgb(block.headerColor);
-    const blockLabel = block.blockType.toUpperCase();
-
-    const blockHeaderRow = ws.addRow([blockLabel, ...Array(TOTAL_COLS - 1).fill(null)]);
-    const rowNum = blockHeaderRow.number;
-    ws.mergeCells(`A${rowNum}:${LAST_COL_LETTER}${rowNum}`);
-    applyFill(blockHeaderRow.getCell(1), bgArgb);
-    blockHeaderRow.commit();
-
-    // Filas de datos del mes actual
     const monthRows = block.rows.filter(
       (row) => row.homeMonth === month && row.homeYear === year && !isPlaceholderRow(row)
     );
@@ -1902,15 +1866,14 @@ async function exportExcelAplicativo() {
       const titulo = `${block.blockType.toUpperCase()} - ${row.title || ""}`.trim();
       const tipo   = getTipo(block.blockType);
 
-      const values = Array(TOTAL_COLS).fill(null);
+      const values = Array(COL_DEFS.length).fill(null);
       values[0]  = titulo;
       values[1]  = row.startDateText || null;
       values[2]  = row.endDateText   || null;
       values[3]  = tipo;
-      values[28] = row.genre         || null; // genero (col AC)
+      values[28] = row.genre         || null;
 
       const dataRow = ws.addRow(values);
-      // Forzar texto en fechas
       dataRow.getCell(2).numFmt = "@";
       dataRow.getCell(3).numFmt = "@";
       dataRow.commit();
@@ -1925,16 +1888,18 @@ async function exportExcelAplicativo() {
   const url = URL.createObjectURL(blob);
   const a   = document.createElement("a");
   a.href    = url;
-  const pad = (n) => String(n).padStart(2, "0");
-  const now = new Date();
-  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
-  a.download = `PANEL_CONTROL_APLICATIVO_${stamp}.xlsx`;
+
+  // Nombre: Carga_Marzo_2026
+  const monthNameCap = MONTH_NAMES_ES[month - 1].charAt(0).toUpperCase()
+    + MONTH_NAMES_ES[month - 1].slice(1);
+  a.download = `Carga_${monthNameCap}_${year}.xlsx`;
+
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 
-  showGridToast("Excel Aplicativo exportado");
+  showGridToast(`Excel Aplicativo exportado · ${monthNameCap} ${year}`);
 }
 
 function attachExcelExportControls(root) {
