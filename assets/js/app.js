@@ -1688,20 +1688,31 @@ function exportExcelEdicion() {
         (row) => row.homeMonth === month && row.homeYear === year && !isPlaceholderRow(row)
       );
 
-      monthRows.forEach((row) => {
+    monthRows.forEach((row) => {
         sheetData.push([
           row.listo,
           row.title  || null,
           row.startDateText || null,
           row.endDateText   || null,
-          row.genre  || null,
+          row.genre  ? row.genre.toUpperCase() : null,
           row.id     || null,
         ]);
       });
-    });
 
     const ws = window.XLSX.utils.aoa_to_sheet(sheetData);
-
+      
+    // Forzar formato texto (@) en columnas de fecha para evitar
+    // que Excel las auto-convierta a número serial al abrir el archivo
+    const dateColIndices = [2, 3]; // INICIO VIG, FIN VIG (base 0)
+    sheetData.forEach((_, rowIdx) => {
+      dateColIndices.forEach((colIdx) => {
+        const cellRef = window.XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
+        if (ws[cellRef] && ws[cellRef].t === 's') {
+          ws[cellRef].z = '@';
+        }
+      });
+    });
+      
     // Anchos de columna orientativos
     ws["!cols"] = [
       { wch: 8 },   // LISTO
