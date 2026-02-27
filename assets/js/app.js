@@ -1787,7 +1787,7 @@ exportMenu.addEventListener("click", (event) => {
       showGridToast("Para Aplicativo — funcionalidad próximamente");
     }
   });
-
+}
 
 function parseISODateValue(value) {
   const normalized = `${value ?? ""}`.trim();
