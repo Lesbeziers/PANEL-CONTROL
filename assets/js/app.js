@@ -1639,13 +1639,13 @@ function attachExcelImportControls(root) {
   });
 }
 
-function exportExcelEdicion() {
-  if (!window.XLSX) {
-    showGridToast("No se pudo cargar la librería de Excel");
+async function exportExcelEdicion() {
+  if (!window.ExcelJS) {
+    showGridToast("No se pudo cargar la librería ExcelJS");
     return;
   }
 
-  // — Recopilar meses que tienen filas con datos (por homeMonth/homeYear) —
+  // Recopilar meses con datos
   const monthsMap = new Map();
   blocks.forEach((block) => {
     if (block.isSeparator) return;
@@ -1658,80 +1658,99 @@ function exportExcelEdicion() {
     });
   });
 
-  // Si no hay ningún dato, exportar el mes visible actual
   if (monthsMap.size === 0) {
     const { month, year } = currentCalendarContext;
     monthsMap.set(`${year}-${String(month).padStart(2, "0")}`, { month, year });
   }
 
-  // Ordenar meses cronológicamente
   const sortedMonths = [...monthsMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([, ctx]) => ctx);
 
-  const wb = window.XLSX.utils.book_new();
+  const workbook = new ExcelJS.Workbook();
 
   sortedMonths.forEach(({ month, year }) => {
-    const sheetData = [];
+    const monthName = MONTH_NAMES_ES[month - 1].toUpperCase();
+    const ws = workbook.addWorksheet(`${monthName} ${year}`);
+
+    ws.columns = [
+      { width: 8 },
+      { width: 55 },
+      { width: 12 },
+      { width: 12 },
+      { width: 18 },
+      { width: 14 },
+    ];
 
     // Fila de cabecera
-    sheetData.push(["LISTO", "TITULO", "INICIO VIG", "FIN VIG", "GENERO", "ID"]);
+    const headerRow = ws.addRow(["LISTO", "TITULO", "INICIO VIG", "FIN VIG", "GENERO", "ID"]);
+    headerRow.font = { bold: true };
+    headerRow.commit();
 
     blocks.forEach((block) => {
-      // Separadores y bloques normales generan siempre su fila de cabecera
-      sheetData.push([block.blockType.toUpperCase(), null, null, null, null, null]);
+      const isSep = block.isSeparator;
+      const blockLabel = block.blockType.toUpperCase();
+      const isRedSeparator = isSep && (blockLabel === "OTROS CANALES" || blockLabel === "VOD");
 
-      if (block.isSeparator) return;
+      // Cabecera de bloque
+      const blockHeaderRow = ws.addRow([blockLabel, null, null, null, null, null]);
+      const rowNum = blockHeaderRow.number;
+      ws.mergeCells(`A${rowNum}:F${rowNum}`);
 
-      // Solo las filas de datos cuyo mes de origen coincide con esta hoja
+      const headerCell = blockHeaderRow.getCell(1);
+      headerCell.font = { bold: true, color: { argb: isRedSeparator ? "FFFFFFFF" : "FF000000" } };
+
+      if (isRedSeparator) {
+        headerCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFC00000" },
+        };
+      }
+
+      blockHeaderRow.commit();
+
+      if (isSep) return;
+
+      // Filas de datos del mes
       const monthRows = block.rows.filter(
         (row) => row.homeMonth === month && row.homeYear === year && !isPlaceholderRow(row)
       );
 
-    monthRows.forEach((row) => {
-        sheetData.push([
+      monthRows.forEach((row) => {
+        const dataRow = ws.addRow([
           row.listo,
-          row.title  || null,
+          row.title || null,
           row.startDateText || null,
-          row.endDateText   || null,
-          row.genre  ? row.genre.toUpperCase() : null,
-          row.id     || null,
+          row.endDateText || null,
+          row.genre ? row.genre.toUpperCase() : null,
+          row.id || null,
         ]);
-      });
-
-    const ws = window.XLSX.utils.aoa_to_sheet(sheetData);
-      
-    // Forzar formato texto (@) en columnas de fecha para evitar
-    // que Excel las auto-convierta a número serial al abrir el archivo
-    const dateColIndices = [2, 3]; // INICIO VIG, FIN VIG (base 0)
-    sheetData.forEach((_, rowIdx) => {
-      dateColIndices.forEach((colIdx) => {
-        const cellRef = window.XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
-        if (ws[cellRef] && ws[cellRef].t === 's') {
-          ws[cellRef].z = '@';
-        }
+        // Forzar texto en columnas de fecha para evitar conversión automática
+        dataRow.getCell(3).numFmt = "@";
+        dataRow.getCell(4).numFmt = "@";
+        dataRow.commit();
       });
     });
-      
-    // Anchos de columna orientativos
-    ws["!cols"] = [
-      { wch: 8 },   // LISTO
-      { wch: 55 },  // TITULO
-      { wch: 12 },  // INICIO VIG
-      { wch: 12 },  // FIN VIG
-      { wch: 18 },  // GENERO
-      { wch: 14 },  // ID
-    ];
-
-    const monthName = MONTH_NAMES_ES[month - 1].toUpperCase();
-    const sheetName = `${monthName} ${year}`;
-    window.XLSX.utils.book_append_sheet(wb, ws, sheetName);
   });
 
+  // Generar y descargar
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
   const pad = (n) => String(n).padStart(2, "0");
   const now = new Date();
   const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
-  window.XLSX.writeFile(wb, `PANEL_CONTROL_DATA_${stamp}.xlsx`);
+  a.download = `PANEL_CONTROL_DATA_${stamp}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
   showGridToast(`Excel exportado · ${sortedMonths.length} hoja(s)`);
 }
 
