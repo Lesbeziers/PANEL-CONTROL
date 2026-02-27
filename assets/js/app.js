@@ -1645,6 +1645,25 @@ async function exportExcelEdicion() {
     return;
   }
 
+  // Mapa de colores UI → colores Excel (ARGB)
+  const HEADER_COLOR_MAP = {
+    "#8fb596": "FF70AD47", // verde
+    "#e8cd8e": "FFFFC000", // amarillo
+  };
+  const COLOR_RED_SEP   = "FFC00000";
+  const COLOR_BLUE_HDR  = "FF4472C4";
+  const COLOR_WHITE     = "FFFFFFFF";
+  const COLOR_BLACK     = "FF000000";
+
+  function toArgb(hexColor) {
+    return HEADER_COLOR_MAP[hexColor?.toLowerCase()] || "FFD9D9D9";
+  }
+
+  function applyHeaderStyle(cell, bgArgb, textArgb = COLOR_WHITE) {
+    cell.font = { bold: true, color: { argb: textArgb } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgArgb } };
+  }
+
   // Recopilar meses con datos
   const monthsMap = new Map();
   blocks.forEach((block) => {
@@ -1674,40 +1693,32 @@ async function exportExcelEdicion() {
     const ws = workbook.addWorksheet(`${monthName} ${year}`);
 
     ws.columns = [
-      { width: 8 },
-      { width: 55 },
-      { width: 12 },
-      { width: 12 },
-      { width: 18 },
-      { width: 14 },
+      { width: 8  },  // LISTO
+      { width: 55 },  // TITULO
+      { width: 12 },  // INICIO VIG
+      { width: 12 },  // FIN VIG
+      { width: 18 },  // GENERO
+      { width: 14 },  // ID
     ];
 
-    // Fila de cabecera
+    // — Fila de cabecera principal (azul, negrita, blanco) —
     const headerRow = ws.addRow(["LISTO", "TITULO", "INICIO VIG", "FIN VIG", "GENERO", "ID"]);
-    headerRow.font = { bold: true };
+    headerRow.eachCell((cell) => applyHeaderStyle(cell, COLOR_BLUE_HDR));
     headerRow.commit();
 
+    // — Bloques —
     blocks.forEach((block) => {
-      const isSep = block.isSeparator;
-      const blockLabel = block.blockType.toUpperCase();
-      const isRedSeparator = isSep && (blockLabel === "OTROS CANALES" || blockLabel === "VOD");
+      const blockLabel  = block.blockType.toUpperCase();
+      const isSep       = block.isSeparator;
+      const isRedSep    = isSep && (blockLabel === "OTROS CANALES" || blockLabel === "VOD");
+      const bgArgb      = isRedSep ? COLOR_RED_SEP : toArgb(block.headerColor);
+      const textArgb    = COLOR_WHITE;
 
-      // Cabecera de bloque
+      // Cabecera de bloque (celda A fusionada A:F)
       const blockHeaderRow = ws.addRow([blockLabel, null, null, null, null, null]);
       const rowNum = blockHeaderRow.number;
       ws.mergeCells(`A${rowNum}:F${rowNum}`);
-
-      const headerCell = blockHeaderRow.getCell(1);
-      headerCell.font = { bold: true, color: { argb: isRedSeparator ? "FFFFFFFF" : "FF000000" } };
-
-      if (isRedSeparator) {
-        headerCell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFC00000" },
-        };
-      }
-
+      applyHeaderStyle(blockHeaderRow.getCell(1), bgArgb, textArgb);
       blockHeaderRow.commit();
 
       if (isSep) return;
@@ -1720,13 +1731,13 @@ async function exportExcelEdicion() {
       monthRows.forEach((row) => {
         const dataRow = ws.addRow([
           row.listo,
-          row.title || null,
+          row.title       || null,
           row.startDateText || null,
-          row.endDateText || null,
-          row.genre ? row.genre.toUpperCase() : null,
-          row.id || null,
+          row.endDateText   || null,
+          row.genre       ? row.genre.toUpperCase() : null,
+          row.id          || null,
         ]);
-        // Forzar texto en columnas de fecha para evitar conversión automática
+        // Forzar texto en columnas de fecha
         dataRow.getCell(3).numFmt = "@";
         dataRow.getCell(4).numFmt = "@";
         dataRow.commit();
