@@ -1765,6 +1765,178 @@ async function exportExcelEdicion() {
   showGridToast(`Excel exportado · ${sortedMonths.length} hoja(s)`);
 }
 
+async function exportExcelAplicativo() {
+  if (!window.ExcelJS) {
+    showGridToast("No se pudo cargar la librería ExcelJS");
+    return;
+  }
+
+  // Mapa blockType → valor "tipo" para el aplicativo
+  const TIPO_MAP = {
+    "promo 20":                    "Promo",
+    "promo 40":                    "Promo",
+    "otras duraciones":            "Otras Duraciones",
+    "combo":                       "Combo",
+    "bumper":                      "Bumper",
+    "id":                          "ID",
+    "pasos a publi":               "Paso a Publi",
+    "intruso":                     "Intruso",
+    "loop protección pop-ups":     "Loop",
+    "loop proteccion pop-ups":     "Loop",
+    "canales laliga":              "Canal LaLiga",
+    "canales golf":                "Canal Golf",
+    "canales caza y pesca":        "Canal Caza y Pesca",
+    "arranque":                    "Arranque",
+    "loop":                        "Loop",
+    "pre roll":                    "Preroll",
+  };
+
+  function getTipo(blockType) {
+    const key = (blockType || "").toLowerCase()
+      .normalize("NFD").replace(/\p{Diacritic}/gu, "")
+      .replace("proteccion", "protección");
+    return TIPO_MAP[key] || blockType;
+  }
+
+  // Mapa colores UI → ARGB Excel
+  const HEADER_COLOR_MAP = {
+    "#8fb596": "FF70AD47",
+    "#e8cd8e": "FFFFC000",
+  };
+  const COLOR_RED_SEP  = "FFC00000";
+  const COLOR_BLUE_HDR = "FF4472C4";
+  const COLOR_WHITE    = "FFFFFFFF";
+
+  function toArgb(hexColor) {
+    return HEADER_COLOR_MAP[hexColor?.toLowerCase()] || "FFD9D9D9";
+  }
+
+  function applyFill(cell, bgArgb) {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgArgb } };
+    cell.font = { bold: true, color: { argb: COLOR_WHITE } };
+  }
+
+  // Definición de las 29 columnas — hidden=true reproduce columnas ocultas del original
+  const COL_DEFS = [
+    { header: "titulo",                    width: 60,  hidden: false },
+    { header: "fecha_entrega",             width: 14,  hidden: false },
+    { header: "fecha_programacion",        width: 14,  hidden: false },
+    { header: "tipo",                      width: 18,  hidden: false },
+    { header: "requiere_guion",            width: 14,  hidden: false },
+    { header: "jefe_guion",                width: 20,  hidden: true  },
+    { header: "fecha_limite_guion",        width: 14,  hidden: true  },
+    { header: "requiere_realiza",          width: 14,  hidden: true  },
+    { header: "jefe_realiza",              width: 20,  hidden: true  },
+    { header: "fecha_entrega_realiza",     width: 14,  hidden: true  },
+    { header: "requiere_diseno",           width: 14,  hidden: true  },
+    { header: "jefe_diseno",               width: 20,  hidden: true  },
+    { header: "fecha_limite_diseno",       width: 14,  hidden: true  },
+    { header: "requiere_ambientacion",     width: 14,  hidden: true  },
+    { header: "jefe_ambientacion",         width: 20,  hidden: true  },
+    { header: "fecha_limite_ambientacion", width: 14,  hidden: true  },
+    { header: "requiere_locucion",         width: 14,  hidden: true  },
+    { header: "jefe_locucion",             width: 20,  hidden: true  },
+    { header: "fecha_limite_locucion",     width: 14,  hidden: true  },
+    { header: "material",                  width: 14,  hidden: false },
+    { header: "observacion_material",      width: 24,  hidden: false },
+    { header: "link",                      width: 30,  hidden: false },
+    { header: "EE",                        width: 10,  hidden: false },
+    { header: "calificacion",              width: 14,  hidden: false },
+    { header: "etiquetas",                 width: 14,  hidden: false },
+    { header: "etiquetas",                 width: 14,  hidden: true  },
+    { header: "etiquetas",                 width: 14,  hidden: false },
+    { header: "notas",                     width: 24,  hidden: true  },
+    { header: "genero",                    width: 14,  hidden: false },
+  ];
+  const TOTAL_COLS = COL_DEFS.length; // 29
+  const LAST_COL_LETTER = "AC";
+
+  const { month, year } = currentCalendarContext;
+
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet("Hoja1");
+
+  // Anchos y columnas ocultas
+  ws.columns = COL_DEFS.map((col) => ({ width: col.width }));
+  COL_DEFS.forEach((col, i) => {
+    if (col.hidden) {
+      ws.getColumn(i + 1).hidden = true;
+    }
+  });
+
+  // — Fila de cabecera principal (azul) —
+  const headerRow = ws.addRow(COL_DEFS.map((col) => col.header));
+  headerRow.eachCell((cell) => applyFill(cell, COLOR_BLUE_HDR));
+  headerRow.commit();
+
+  // — Bloques —
+  blocks.forEach((block) => {
+    if (block.isSeparator) {
+      const blockLabel = block.blockType.toUpperCase();
+      const isRedSep   = blockLabel === "OTROS CANALES" || blockLabel === "VOD";
+      const bgArgb     = isRedSep ? COLOR_RED_SEP : toArgb(block.headerColor);
+
+      const sepRow = ws.addRow([blockLabel, ...Array(TOTAL_COLS - 1).fill(null)]);
+      const rowNum = sepRow.number;
+      ws.mergeCells(`A${rowNum}:${LAST_COL_LETTER}${rowNum}`);
+      applyFill(sepRow.getCell(1), bgArgb);
+      sepRow.commit();
+      return;
+    }
+
+    const bgArgb     = toArgb(block.headerColor);
+    const blockLabel = block.blockType.toUpperCase();
+
+    const blockHeaderRow = ws.addRow([blockLabel, ...Array(TOTAL_COLS - 1).fill(null)]);
+    const rowNum = blockHeaderRow.number;
+    ws.mergeCells(`A${rowNum}:${LAST_COL_LETTER}${rowNum}`);
+    applyFill(blockHeaderRow.getCell(1), bgArgb);
+    blockHeaderRow.commit();
+
+    // Filas de datos del mes actual
+    const monthRows = block.rows.filter(
+      (row) => row.homeMonth === month && row.homeYear === year && !isPlaceholderRow(row)
+    );
+
+    monthRows.forEach((row) => {
+      const titulo = `${block.blockType.toUpperCase()} - ${row.title || ""}`.trim();
+      const tipo   = getTipo(block.blockType);
+
+      const values = Array(TOTAL_COLS).fill(null);
+      values[0]  = titulo;
+      values[1]  = row.startDateText || null;
+      values[2]  = row.endDateText   || null;
+      values[3]  = tipo;
+      values[28] = row.genre         || null; // genero (col AC)
+
+      const dataRow = ws.addRow(values);
+      // Forzar texto en fechas
+      dataRow.getCell(2).numFmt = "@";
+      dataRow.getCell(3).numFmt = "@";
+      dataRow.commit();
+    });
+  });
+
+  // Generar y descargar
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement("a");
+  a.href    = url;
+  const pad = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+  a.download = `PANEL_CONTROL_APLICATIVO_${stamp}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showGridToast("Excel Aplicativo exportado");
+}
+
 function attachExcelExportControls(root) {
   const exportWrapper = root.querySelector(".export-excel-wrapper");
   const exportButton = root.querySelector(".export-excel-btn");
@@ -1825,7 +1997,7 @@ exportMenu.addEventListener("click", (event) => {
     if (mode === "edicion") {
       exportExcelEdicion();
     } else {
-      showGridToast("Para Aplicativo — funcionalidad próximamente");
+      exportExcelAplicativo();
     }
   });
 }
