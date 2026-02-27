@@ -1167,3 +1167,85 @@ body {
     gap: 9px;
   }
 }
+
+/* ── Buscador ─────────────────────────────────────────────── */
+.search-box-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-box-icon {
+  position: absolute;
+  left: 8px;
+  font-size: 13px;
+  color: #888;
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+}
+
+.search-box-input {
+  padding: 0 26px 0 26px;
+  height: 28px;
+  border: 1px solid #bbb;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  outline: none;
+  width: 200px;
+  background: #fff;
+  color: #222;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.search-box-input:focus {
+  border-color: #4472c4;
+  box-shadow: 0 0 0 2px rgba(68, 114, 196, 0.18);
+}
+
+.search-box-input::placeholder {
+  color: #aaa;
+  font-style: italic;
+}
+
+.search-box-clear {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #999;
+  padding: 0;
+  line-height: 1;
+  display: none;
+  transition: color 0.1s;
+}
+
+.search-box-clear:hover {
+  color: #333;
+}
+
+.search-box-wrapper.has-value .search-box-clear {
+  display: block;
+}
+
+/* ── Filas atenuadas por búsqueda ─────────────────────────── */
+.left-row,
+.day-row {
+  transition: opacity 0.15s ease;
+}
+
+.left-row.is-search-dim,
+.day-row.is-search-dim {
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+/* ── Bloquear botones de colapso durante búsqueda activa ──── */
+.search-is-active .gutter-icon-btn--collapse {
+  pointer-events: none;
+  opacity: 0.35;
+}
