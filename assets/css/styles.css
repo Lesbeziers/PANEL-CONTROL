@@ -1187,24 +1187,24 @@ body {
 }
 
 .search-box-input {
-  padding: 0 28px 0 26px;
-  height: 28px;
-  border: 1px solid #aaa;
-  border-radius: 3px;
-  font-size: 11px;
+  padding: 0 24px 0 26px;
+  height: 24px;
+  border: 1px solid #333333;
+  border-radius: 0;
+  font-size: 14px;
+  font-weight: 700;
   font-family: inherit;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   text-transform: uppercase;
   outline: none;
   width: 220px;
   background: #fff;
-  color: #222;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  color: #333333;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
 .search-box-input:focus {
-  border-color: #4472c4;
-  box-shadow: 0 0 0 2px rgba(68, 114, 196, 0.18);
+  border-color: #333333;
 }
 
 .search-box-input::placeholder {
