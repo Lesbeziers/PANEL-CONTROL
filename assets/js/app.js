@@ -1639,6 +1639,91 @@ function attachExcelImportControls(root) {
   });
 }
 
+function exportExcelEdicion() {
+  if (!window.XLSX) {
+    showGridToast("No se pudo cargar la librería de Excel");
+    return;
+  }
+
+  // — Recopilar meses que tienen filas con datos (por homeMonth/homeYear) —
+  const monthsMap = new Map();
+  blocks.forEach((block) => {
+    if (block.isSeparator) return;
+    block.rows.forEach((row) => {
+      if (isPlaceholderRow(row)) return;
+      const key = `${row.homeYear}-${String(row.homeMonth).padStart(2, "0")}`;
+      if (!monthsMap.has(key)) {
+        monthsMap.set(key, { month: row.homeMonth, year: row.homeYear });
+      }
+    });
+  });
+
+  // Si no hay ningún dato, exportar el mes visible actual
+  if (monthsMap.size === 0) {
+    const { month, year } = currentCalendarContext;
+    monthsMap.set(`${year}-${String(month).padStart(2, "0")}`, { month, year });
+  }
+
+  // Ordenar meses cronológicamente
+  const sortedMonths = [...monthsMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, ctx]) => ctx);
+
+  const wb = window.XLSX.utils.book_new();
+
+  sortedMonths.forEach(({ month, year }) => {
+    const sheetData = [];
+
+    // Fila de cabecera
+    sheetData.push(["LISTO", "TITULO", "INICIO VIG", "FIN VIG", "GENERO", "ID"]);
+
+    blocks.forEach((block) => {
+      // Separadores y bloques normales generan siempre su fila de cabecera
+      sheetData.push([block.blockType.toUpperCase(), null, null, null, null, null]);
+
+      if (block.isSeparator) return;
+
+      // Solo las filas de datos cuyo mes de origen coincide con esta hoja
+      const monthRows = block.rows.filter(
+        (row) => row.homeMonth === month && row.homeYear === year && !isPlaceholderRow(row)
+      );
+
+      monthRows.forEach((row) => {
+        sheetData.push([
+          row.listo,
+          row.title  || null,
+          row.startDateText || null,
+          row.endDateText   || null,
+          row.genre  || null,
+          row.id     || null,
+        ]);
+      });
+    });
+
+    const ws = window.XLSX.utils.aoa_to_sheet(sheetData);
+
+    // Anchos de columna orientativos
+    ws["!cols"] = [
+      { wch: 8 },   // LISTO
+      { wch: 55 },  // TITULO
+      { wch: 12 },  // INICIO VIG
+      { wch: 12 },  // FIN VIG
+      { wch: 18 },  // GENERO
+      { wch: 14 },  // ID
+    ];
+
+    const monthName = MONTH_NAMES_ES[month - 1].toUpperCase();
+    const sheetName = `${monthName} ${year}`;
+    window.XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+  window.XLSX.writeFile(wb, `PANEL_CONTROL_DATA_${stamp}.xlsx`);
+  showGridToast(`Excel exportado · ${sortedMonths.length} hoja(s)`);
+}
+
 function attachExcelExportControls(root) {
   const exportWrapper = root.querySelector(".export-excel-wrapper");
   const exportButton = root.querySelector(".export-excel-btn");
@@ -1689,16 +1774,19 @@ function attachExcelExportControls(root) {
     }
   });
 
-  exportMenu.addEventListener("click", (event) => {
+exportMenu.addEventListener("click", (event) => {
     const item = event.target.closest("[data-export]");
     if (!item) {
       return;
     }
     const mode = item.dataset.export;
     closeMenu();
-    showGridToast(`Exportar "${mode === "edicion" ? "Para Edición" : "Para Aplicativo"}" — funcionalidad próximamente`);
+    if (mode === "edicion") {
+      exportExcelEdicion();
+    } else {
+      showGridToast("Para Aplicativo — funcionalidad próximamente");
+    }
   });
-}
 
 
 function parseISODateValue(value) {
