@@ -1209,8 +1209,9 @@ body {
 
 .search-box-input::placeholder {
   color: #999;
-  font-style: normal;
+  font-style: italic;
   text-transform: none;
+  font-weight: 400;
 }
 
 .search-box-clear {
