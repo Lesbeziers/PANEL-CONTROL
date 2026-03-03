@@ -2895,12 +2895,12 @@ function handleGridPointerDown(event) {
           .slice(minVis, maxVis + 1)
           .map((item) => item.sourceIndex);
 
-        dragSelection = [{
+        dragSelection = {
           blockIndex: meta.blockIndex,
           col: meta.columnKey,
           r1: Math.min(...selectedSourceIndices),
           r2: Math.max(...selectedSourceIndices),
-        }];
+        };
 
         setSelectedCell(cell);
         renderDragSelectionPreview(dragSelection);
