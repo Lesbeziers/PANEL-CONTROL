@@ -2921,7 +2921,13 @@ function handleGridPointerDown(event) {
     }
     return;
   }
-  shiftSelectAnchor = null;
+  shiftSelectAnchor = {
+    blockIndex: meta.blockIndex,
+    columnKey: meta.columnKey,
+    anchorSourceIndex: meta.rowIndex,
+    anchorVisibleIndex: 0,
+    activeVisibleIndex: 0,
+  };
   dragSelection = null;
   clearDragSelectionPreview();
 
