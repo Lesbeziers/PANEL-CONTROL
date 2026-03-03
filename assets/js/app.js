@@ -2135,36 +2135,30 @@ function getOrderedRowsForMonth(block, calendarContext) {
     };
   });
 
-  const visibleRows = indexedRows.filter((item) => item.isVisibleInCurrentMonth);
+const visibleRows = indexedRows.filter((item) => item.isVisibleInCurrentMonth);
+
+  const nonPlaceholders = visibleRows.filter((item) => !isPlaceholderRow(item.row));
+  const placeholders = visibleRows.filter((item) => isPlaceholderRow(item.row));
 
   if (sortState.key) {
-    visibleRows.sort((left, right) => {
-      // Placeholders siempre al final, incluso con sort activo
-      const leftIsPlaceholder = isPlaceholderRow(left.row);
-      const rightIsPlaceholder = isPlaceholderRow(right.row);
-      if (leftIsPlaceholder !== rightIsPlaceholder) {
-        return leftIsPlaceholder ? 1 : -1;
-      }
-
+    nonPlaceholders.sort((left, right) => {
       const a = getSortValue(left.row, sortState.key);
       const b = getSortValue(right.row, sortState.key);
       const cmp =
         typeof a === "number" && typeof b === "number"
           ? a - b
           : `${a}`.localeCompare(`${b}`, "es-ES", { numeric: true });
-
       if (cmp !== 0) {
         return sortState.dir === "asc" ? cmp : -cmp;
       }
-
       return left.sourceIndex - right.sourceIndex;
     });
   }
-  // Sin sort activo: visibleRows ya está en orden natural de sourceIndex
-  // porque block.rows.map() preserva el orden del array.
 
-  if (visibleRows.length) {
-    return visibleRows;
+  const orderedVisibleRows = [...nonPlaceholders, ...placeholders];
+
+  if (orderedVisibleRows.length) {
+    return orderedVisibleRows;
   }
 
   // Fallback: bloque vacío → crear fila placeholder
