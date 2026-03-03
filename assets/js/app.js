@@ -3527,11 +3527,12 @@ function handleGridPaste(event) {
     if (clipboardRows.length > targetRowKeys.length) {
       const missingRows = clipboardRows.length - targetRowKeys.length;
       const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
-      if (rowsToInsert > 0) {
-        insertRows(startMeta.blockIndex, block.rows.length, rowsToInsert, { historyType: "paste" });
-        const currentBlock = blocks[startMeta.blockIndex];
-        const newRows = currentBlock?.rows?.slice(-rowsToInsert) || [];
-        targetRowKeys = targetRowKeys.concat(newRows.map((row) => row?.rowKey).filter(Boolean));
+if (rowsToInsert > 0) {
+          const insertAtIndex = startMeta.rowIndex + 1;
+          insertRows(startMeta.blockIndex, insertAtIndex, rowsToInsert, { historyType: "paste" });
+          const currentBlock = blocks[startMeta.blockIndex];
+          const newRows = currentBlock?.rows?.slice(insertAtIndex, insertAtIndex + rowsToInsert) || [];
+          targetRowKeys = targetRowKeys.concat(newRows.map((row) => row?.rowKey).filter(Boolean));
         
         if (missingRows > MAX_AUTO_INSERT) {
           showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
