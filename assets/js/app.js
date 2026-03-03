@@ -1118,17 +1118,10 @@ function getCopyRangeValues(selection) {
     return [];
   }
 
-  const sourceValues = [];
-  for (let rowIndex = selection.r1; rowIndex <= selection.r2; rowIndex += 1) {
-    const sourceRow = sourceBlock.rows[rowIndex];
-    if (!sourceRow) {
-      break;
-    }
-
-    sourceValues.push(getCellRawValue(sourceRow, selection.col));
-  }
-
-  return sourceValues;
+  const orderedRows = getOrderedRowsForMonth(sourceBlock, currentCalendarContext);
+  return orderedRows
+    .filter((item) => item.sourceIndex >= selection.r1 && item.sourceIndex <= selection.r2)
+    .map((item) => getCellRawValue(item.row, selection.col));
 }
 
 function resolveVerticalPasteValues({ rangeSize, clipboardText }) {
@@ -2746,10 +2739,10 @@ function buildCopyTextFromSelection(selection) {
     return "";
   }
 
-  const values = [];
-  for (let rowIndex = selection.r1; rowIndex <= selection.r2; rowIndex += 1) {
-    values.push(getCellRawValue(block.rows[rowIndex], selection.col));
-  }
+  const orderedRows = getOrderedRowsForMonth(block, currentCalendarContext);
+  const values = orderedRows
+    .filter((item) => item.sourceIndex >= selection.r1 && item.sourceIndex <= selection.r2)
+    .map((item) => getCellRawValue(item.row, selection.col));
 
   return values.join("\n");
 }
