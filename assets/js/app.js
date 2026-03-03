@@ -3508,13 +3508,19 @@ function handleGridPaste(event) {
     let anchorVisIdx = orderedRows.findIndex((item) => item.row?.rowKey === anchorRowId);
     if (anchorVisIdx < 0) anchorVisIdx = 0;
 
-    const pasteCount = Math.min(clipboardLines.length, MAX_AUTO_INSERT);
+const pasteCount = Math.min(clipboardLines.length, MAX_AUTO_INSERT);
 
-    // Recoger rowKeys de filas visibles desde el ancla
-    let targetRowKeys = orderedRows
-      .slice(anchorVisIdx, anchorVisIdx + pasteCount)
-      .map((item) => item.row?.rowKey)
-      .filter(Boolean);
+    // Si el ancla es un placeholder, no pegar en ella — insertar filas nuevas
+    const anchorIsPlaceholder = isPlaceholderRow(orderedRows[anchorVisIdx]?.row);
+
+    // Recoger rowKeys de filas visibles desde el ancla (solo si no es placeholder)
+    let targetRowKeys = anchorIsPlaceholder
+      ? []
+      : orderedRows
+          .slice(anchorVisIdx, anchorVisIdx + pasteCount)
+          .filter((item) => !isPlaceholderRow(item.row))
+          .map((item) => item.row?.rowKey)
+          .filter(Boolean);
 
     // Insertar filas nuevas si faltan destinos
     if (pasteCount > targetRowKeys.length) {
