@@ -233,6 +233,7 @@ let dragSelectState = {
   downY: 0,
 };
 let dragSelection = null;
+let shiftSelectAnchor = null;
 let suppressNextGridClick = false;
 let genreTypeBuffer = "";
 let genreTypeBufferTimestamp = 0;
@@ -3241,6 +3242,7 @@ function handleGridEnterKey(event) {
     }
 
     if (selectedCell) {
+      shiftSelectAnchor = null;
       setSelectedCell(null);
       dragSelection = null;
       clearDragSelectionPreview();
@@ -3265,10 +3267,55 @@ function handleGridEnterKey(event) {
     return;
   }
 
-  if (isArrowNavigationKey) {
+if (isArrowNavigationKey) {
     if (isEditingElement(document.activeElement)) {
       return;
     }
+
+    if (event.shiftKey && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      const meta = getCellMeta(selectedCell);
+      if (!meta) return;
+      event.preventDefault();
+
+      const block = blocks[meta.blockIndex];
+      if (!block) return;
+
+      if (
+        !shiftSelectAnchor
+        || shiftSelectAnchor.blockIndex !== meta.blockIndex
+        || shiftSelectAnchor.columnKey !== meta.columnKey
+      ) {
+        shiftSelectAnchor = {
+          blockIndex: meta.blockIndex,
+          rowIndex: meta.rowIndex,
+          columnKey: meta.columnKey,
+        };
+      }
+
+      let activeEnd;
+      if (dragSelection && dragSelection.blockIndex === meta.blockIndex && dragSelection.col === meta.columnKey) {
+        activeEnd = shiftSelectAnchor.rowIndex === dragSelection.r1
+          ? dragSelection.r2
+          : dragSelection.r1;
+      } else {
+        activeEnd = meta.rowIndex;
+      }
+
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      const nextEnd = Math.max(0, Math.min(block.rows.length - 1, activeEnd + delta));
+
+      dragSelection = {
+        blockIndex: meta.blockIndex,
+        col: meta.columnKey,
+        r1: Math.min(shiftSelectAnchor.rowIndex, nextEnd),
+        r2: Math.max(shiftSelectAnchor.rowIndex, nextEnd),
+      };
+
+      renderDragSelectionPreview(dragSelection);
+      return;
+    }
+
+    shiftSelectAnchor = null;
 
     const nextCell = getAdjacentCellByArrow(selectedCell, event.key);
     if (!nextCell) {
