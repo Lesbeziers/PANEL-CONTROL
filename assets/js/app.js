@@ -724,11 +724,17 @@ function getContextSelectionTarget(blockIndex, rowIndex) {
     const startRow = Math.min(dragSelection.r1, dragSelection.r2);
     const endRow = Math.max(dragSelection.r1, dragSelection.r2);
     if (rowIndex >= startRow && rowIndex <= endRow) {
+      // Contar filas reales visibles en el rango, no el span aritmético
+      const block = blocks[blockIndex];
+      const orderedRows = getOrderedRowsForMonth(block, currentCalendarContext);
+      const rowsInRange = orderedRows.filter(
+        (item) => item.sourceIndex >= startRow && item.sourceIndex <= endRow
+      );
       return {
         blockIndex,
         startRow,
         endRow,
-        count: endRow - startRow + 1,
+        count: Math.max(1, rowsInRange.length),
       };
     }
   }
