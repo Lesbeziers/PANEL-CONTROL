@@ -2103,19 +2103,8 @@ function getSortValue(row, key) {
 }
 
 function getOrderedRowsForMonth(block, calendarContext) {
-  const getVisibleRowPriority = (item) => {
-    if (item.isInheritedInMonth) {
-      return 0;
-    }
-
-    if (isPlaceholderRow(item.row)) {
-      return 2;
-    }
-
-    return 1;
-  };
-
   const monthRange = getVisibleMonthRange(calendarContext);
+
   const indexedRows = block.rows.map((row, sourceIndex) => {
     if (!Number.isInteger(row.homeMonth) || !Number.isInteger(row.homeYear)) {
       row.homeMonth = calendarContext.month;
@@ -2124,16 +2113,17 @@ function getOrderedRowsForMonth(block, calendarContext) {
 
     const rowRange = getRowRange(row);
     const isVisibleInMonth = intersectsVisibleMonth(rowRange, monthRange);
-    const isUnscheduledInMonth = !rowRange
-      && row.homeMonth === calendarContext.month
-      && row.homeYear === calendarContext.year;
+    const isUnscheduledInMonth =
+      !rowRange &&
+      row.homeMonth === calendarContext.month &&
+      row.homeYear === calendarContext.year;
     const isVisibleInCurrentMonth = isVisibleInMonth || isUnscheduledInMonth;
     const isInheritedInMonth =
-      !!rowRange
-      && isVisibleInMonth
-      && (
-        rowRange.startDate.getMonth() + 1 !== calendarContext.month
-        || rowRange.startDate.getFullYear() !== calendarContext.year
+      !!rowRange &&
+      isVisibleInMonth &&
+      (
+        rowRange.startDate.getMonth() + 1 !== calendarContext.month ||
+        rowRange.startDate.getFullYear() !== calendarContext.year
       );
 
     return {
@@ -2147,30 +2137,37 @@ function getOrderedRowsForMonth(block, calendarContext) {
 
   const visibleRows = indexedRows.filter((item) => item.isVisibleInCurrentMonth);
 
-  const orderedVisibleRows = [...visibleRows].sort((left, right) => {
-    const priorityDelta = getVisibleRowPriority(left) - getVisibleRowPriority(right);
-    if (priorityDelta !== 0 && (!sortState.key || getVisibleRowPriority(left) === 2 || getVisibleRowPriority(right) === 2)) {
-      return priorityDelta;
-    }
+  if (sortState.key) {
+    visibleRows.sort((left, right) => {
+      // Placeholders siempre al final, incluso con sort activo
+      const leftIsPlaceholder = isPlaceholderRow(left.row);
+      const rightIsPlaceholder = isPlaceholderRow(right.row);
+      if (leftIsPlaceholder !== rightIsPlaceholder) {
+        return leftIsPlaceholder ? 1 : -1;
+      }
 
-    if (sortState.key) {
       const a = getSortValue(left.row, sortState.key);
       const b = getSortValue(right.row, sortState.key);
-      const cmp = typeof a === "number" && typeof b === "number"
-        ? a - b
-        : `${a}`.localeCompare(`${b}`, "es-ES", { numeric: true });
+      const cmp =
+        typeof a === "number" && typeof b === "number"
+          ? a - b
+          : `${a}`.localeCompare(`${b}`, "es-ES", { numeric: true });
+
       if (cmp !== 0) {
         return sortState.dir === "asc" ? cmp : -cmp;
       }
-    }
 
-    return left.sourceIndex - right.sourceIndex;
-  });
+      return left.sourceIndex - right.sourceIndex;
+    });
+  }
+  // Sin sort activo: visibleRows ya está en orden natural de sourceIndex
+  // porque block.rows.map() preserva el orden del array.
 
-  if (orderedVisibleRows.length) {
-    return orderedVisibleRows;
+  if (visibleRows.length) {
+    return visibleRows;
   }
 
+  // Fallback: bloque vacío → crear fila placeholder
   const fallbackRow = newRowForBlock(block.blockType, calendarContext);
   block.rows.push(fallbackRow);
 
