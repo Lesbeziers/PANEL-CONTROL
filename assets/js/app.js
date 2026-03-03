@@ -2868,7 +2868,60 @@ function handleGridPointerDown(event) {
   if (!meta) {
     return;
   }
+// Shift+Click → selección de rango
+  if (event.shiftKey && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault();
 
+    if (
+      shiftSelectAnchor &&
+      shiftSelectAnchor.blockIndex === meta.blockIndex &&
+      shiftSelectAnchor.columnKey === meta.columnKey
+    ) {
+      // Hay ancla en el mismo bloque y columna → extender rango
+      const block = blocks[meta.blockIndex];
+      const orderedRows = getOrderedRowsForMonth(block, currentCalendarContext);
+
+      const anchorVisIdx = orderedRows.findIndex(
+        (item) => item.sourceIndex === shiftSelectAnchor.anchorSourceIndex
+      );
+      const targetVisIdx = orderedRows.findIndex(
+        (item) => item.sourceIndex === meta.rowIndex
+      );
+
+      if (anchorVisIdx >= 0 && targetVisIdx >= 0) {
+        const minVis = Math.min(anchorVisIdx, targetVisIdx);
+        const maxVis = Math.max(anchorVisIdx, targetVisIdx);
+        const selectedSourceIndices = orderedRows
+          .slice(minVis, maxVis + 1)
+          .map((item) => item.sourceIndex);
+
+        dragSelection = [{
+          blockIndex: meta.blockIndex,
+          col: meta.columnKey,
+          r1: Math.min(...selectedSourceIndices),
+          r2: Math.max(...selectedSourceIndices),
+        }];
+
+        setSelectedCell(cell);
+        renderDragSelectionPreview(dragSelection);
+      }
+    } else {
+      // No hay ancla compatible → establecer ancla en la celda actual
+      shiftSelectAnchor = {
+        blockIndex: meta.blockIndex,
+        columnKey: meta.columnKey,
+        anchorSourceIndex: meta.rowIndex,
+        anchorVisibleIndex: 0,
+        activeVisibleIndex: 0,
+      };
+      
+      dragSelection = null;
+      clearDragSelectionPreview();
+      setSelectedCell(cell);
+    }
+    return;
+  }
+  shiftSelectAnchor = null;
   dragSelection = null;
   clearDragSelectionPreview();
 
