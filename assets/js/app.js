@@ -3394,11 +3394,14 @@ if (event.shiftKey && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
     return;
   }
 
-  if ((event.key === "Delete" || event.key === "Backspace") && selectedCell) {
-    const hasVerticalRangeSelection =
-      !!dragSelection
-      && dragSelection.col === selectedCell.dataset.columnKey
-      && dragSelection.r2 > dragSelection.r1;
+const selectedRowIndex = Number.parseInt(selectedCell.dataset.rowIndex, 10);
+  const hasVerticalRangeSelection =
+    !!dragSelection
+    && dragSelection.blockIndex === Number.parseInt(selectedCell.dataset.blockIndex, 10)
+    && dragSelection.col === selectedCell.dataset.columnKey
+    && dragSelection.r2 > dragSelection.r1
+    && selectedRowIndex >= dragSelection.r1
+    && selectedRowIndex <= dragSelection.r2;
 
     if (hasVerticalRangeSelection && !editingCell && !isEditingElement(document.activeElement)) {
       withHistoryAction("clear", { groupKey: `clear:${dragSelection.blockIndex}:${dragSelection.col}` }, () => {
