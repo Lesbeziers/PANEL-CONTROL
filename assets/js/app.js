@@ -3519,26 +3519,30 @@ function handleGridPaste(event) {
       anchorVisibleIndex = 0;
     }
 
-    let targetRowKeys = orderedRows
-      .slice(anchorVisibleIndex)
-      .map((item) => item.row?.rowKey)
-      .filter(Boolean);
+const anchorIsPlaceholder = isPlaceholderRow(orderedRows[anchorVisibleIndex]?.row);
 
-    if (clipboardRows.length > targetRowKeys.length) {
-      const missingRows = clipboardRows.length - targetRowKeys.length;
-      const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
-if (rowsToInsert > 0) {
-          const insertAtIndex = startMeta.rowIndex + 1;
+      let targetRowKeys = anchorIsPlaceholder
+        ? []
+        : orderedRows.slice(anchorVisibleIndex).map((item) => item.row?.rowKey).filter(Boolean);
+
+      if (clipboardRows.length > targetRowKeys.length) {
+        const missingRows = clipboardRows.length - targetRowKeys.length;
+        const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
+        if (rowsToInsert > 0) {
+          const maxSourceIndex = orderedRows.length > 0
+            ? Math.max(...orderedRows.map((item) => item.sourceIndex))
+            : block.rows.length - 1;
+          const insertAtIndex = maxSourceIndex + 1;
           insertRows(startMeta.blockIndex, insertAtIndex, rowsToInsert, { historyType: "paste" });
           const currentBlock = blocks[startMeta.blockIndex];
           const newRows = currentBlock?.rows?.slice(insertAtIndex, insertAtIndex + rowsToInsert) || [];
           targetRowKeys = targetRowKeys.concat(newRows.map((row) => row?.rowKey).filter(Boolean));
-        
-        if (missingRows > MAX_AUTO_INSERT) {
-          showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
+
+          if (missingRows > MAX_AUTO_INSERT) {
+            showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
+          }
         }
       }
-    }
 
     const maxPasteRows = clipboardRows.length > 1
       ? Math.min(clipboardRows.length, targetRowKeys.length)
