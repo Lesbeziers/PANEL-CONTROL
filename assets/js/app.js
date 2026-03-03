@@ -2905,14 +2905,19 @@ function handleGridPointerDown(event) {
         setSelectedCell(cell);
         renderDragSelectionPreview(dragSelection);
       }
-    } else {
+   } else {
       // No hay ancla compatible → establecer ancla en la celda actual
+      const elseBlock = blocks[meta.blockIndex];
+      const elseOrderedRows = getOrderedRowsForMonth(elseBlock, currentCalendarContext);
+      const elseVisIdx = Math.max(0, elseOrderedRows.findIndex(
+        (item) => item.sourceIndex === meta.rowIndex
+      ));
       shiftSelectAnchor = {
         blockIndex: meta.blockIndex,
         columnKey: meta.columnKey,
         anchorSourceIndex: meta.rowIndex,
-        anchorVisibleIndex: 0,
-        activeVisibleIndex: 0,
+        anchorVisibleIndex: elseVisIdx,
+        activeVisibleIndex: elseVisIdx,
       };
       
       dragSelection = null;
@@ -2921,12 +2926,18 @@ function handleGridPointerDown(event) {
     }
     return;
   }
+ const anchorBlock = blocks[meta.blockIndex];
+  const anchorOrderedRows = getOrderedRowsForMonth(anchorBlock, currentCalendarContext);
+  const anchorVisIdx = Math.max(0, anchorOrderedRows.findIndex(
+    (item) => item.sourceIndex === meta.rowIndex
+  ));
+
   shiftSelectAnchor = {
     blockIndex: meta.blockIndex,
     columnKey: meta.columnKey,
     anchorSourceIndex: meta.rowIndex,
-    anchorVisibleIndex: 0,
-    activeVisibleIndex: 0,
+    anchorVisibleIndex: anchorVisIdx,
+    activeVisibleIndex: anchorVisIdx,
   };
   dragSelection = null;
   clearDragSelectionPreview();
