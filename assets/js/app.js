@@ -3440,145 +3440,124 @@ if ((event.key === "Delete" || event.key === "Backspace") && selectedCell) {
 }
 
 function handleGridPaste(event) {
-  if (!selectedCell || editingCell) {
-    return;
-  }
+  if (!selectedCell || editingCell) return;
 
   const pastedText = event.clipboardData?.getData("text/plain") || "";
-  const clipboardRows = pastedText
+  const clipboardLines = pastedText
     .split(/\r?\n/)
     .filter((line, index, all) => line !== "" || index < all.length - 1);
-  if (!clipboardRows.length) {
-    return;
-  }
-
-  const hasVerticalRangeSelection =
-    !!dragSelection
-    && dragSelection.blockIndex === Number.parseInt(selectedCell.dataset.blockIndex, 10)
-    && dragSelection.col === selectedCell.dataset.columnKey
-    && dragSelection.r2 > dragSelection.r1;
-
-  const isEditorActive = isEditingElement(document.activeElement);
+  if (!clipboardLines.length) return;
 
   event.preventDefault();
-  withHistoryAction("paste", { groupKey: "paste" }, () => {
-    if (hasVerticalRangeSelection && !isEditorActive) {
-      const selection = { ...dragSelection };
-      const rangeSize = selection.r2 - selection.r1 + 1;
-      const pasteValues = resolveVerticalPasteValues({
-        rangeSize,
-        clipboardText: pastedText,
-      });
-      if (!pasteValues.length) {
-        return;
-      }
 
+  const selectedMeta = getCellMeta(selectedCell);
+  if (!selectedMeta) return;
+
+  const block = blocks[selectedMeta.blockIndex];
+  if (!block?.rows?.length) return;
+
+  // Fuente de verdad: solo filas visibles en el mes actual
+  const orderedRows = getOrderedRowsForMonth(block, currentCalendarContext);
+
+  // ¿El selectedCell está DENTRO del rango de dragSelection activo?
+  const selectedSourceIndex = selectedMeta.rowIndex;
+  const isInsideDragSelection =
+    !!dragSelection
+    && dragSelection.blockIndex === selectedMeta.blockIndex
+    && dragSelection.col === selectedMeta.columnKey
+    && dragSelection.r2 > dragSelection.r1
+    && selectedSourceIndex >= dragSelection.r1
+    && selectedSourceIndex <= dragSelection.r2;
+
+  withHistoryAction("paste", { groupKey: "paste" }, () => {
+
+    if (isInsideDragSelection && !isEditingElement(document.activeElement)) {
+      // ── PATH A: Pegar sobre un rango seleccionado ──────────────────────
+      // Filas visibles dentro del rango (por sourceIndex, no aritmética ciega)
+      const visibleInRange = orderedRows.filter(
+        (item) => item.sourceIndex >= dragSelection.r1 && item.sourceIndex <= dragSelection.r2
+      );
+      const rangeSize = visibleInRange.length;
+
+      const pasteValues = resolveVerticalPasteValues({ rangeSize, clipboardText: pastedText });
+      if (!pasteValues.length) return;
+
+      let targetRowKeys = visibleInRange.map((item) => item.row?.rowKey).filter(Boolean);
+
+      // Insertar filas extra si el portapapeles tiene más líneas que el rango
       const missingRows = Math.max(0, pasteValues.length - rangeSize);
       const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
       if (rowsToInsert > 0) {
-        insertRows(selection.blockIndex, selection.r2 + 1, rowsToInsert, { historyType: "paste" });
-        dragSelection = {
-          ...selection,
-          r2: selection.r2 + rowsToInsert,
-        };
-        renderDragSelectionPreview(dragSelection);
-
+        const lastSourceIndex = Math.max(...visibleInRange.map((i) => i.sourceIndex));
+        insertRows(dragSelection.blockIndex, lastSourceIndex + 1, rowsToInsert, { historyType: "paste" });
+        const updatedBlock = blocks[dragSelection.blockIndex];
+        const newRows = updatedBlock?.rows?.slice(lastSourceIndex + 1, lastSourceIndex + 1 + rowsToInsert) || [];
+        targetRowKeys = targetRowKeys.concat(newRows.map((r) => r?.rowKey).filter(Boolean));
         if (missingRows > MAX_AUTO_INSERT) {
           showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
         }
       }
 
-      const maxPasteRows = rangeSize + rowsToInsert;
-      for (let offset = 0; offset < Math.min(pasteValues.length, maxPasteRows); offset += 1) {
-        const targetCell = document.querySelector(
-          `[data-block-index="${selection.blockIndex}"][data-row-index="${selection.r1 + offset}"][data-column-key="${selection.col}"]`
-        );
-        if (targetCell) {
-          setCellValue(targetCell, pasteValues[offset], { type: "paste", groupKey: "paste" });
-        }
+      const maxPaste = Math.min(pasteValues.length, targetRowKeys.length);
+      for (let i = 0; i < maxPaste; i++) {
+        const meta = getCellMetaFromRowKey(targetRowKeys[i], dragSelection.col);
+        const cell = meta ? getCellByMeta(meta) : null;
+        if (cell) setCellValue(cell, pasteValues[i], { type: "paste", groupKey: "paste" });
       }
 
       renderRows();
       return;
     }
 
-    const rowData = getRowByCell(selectedCell);
-    if (!rowData) {
-      return;
-    }
-
-    const startMeta = rowData.meta;
-    const block = blocks[startMeta.blockIndex];
-    if (!block?.rows?.length) {
-      return;
-    }
-
-    const orderedRows = getOrderedRowsForMonth(block, currentCalendarContext);
+    // ── PATH B: Pegar desde celda ancla hacia abajo ────────────────────
+    // Localizar la celda ancla en las filas visibles por rowKey (no sourceIndex)
     const anchorRowId = selectedCell?.dataset?.rowId || null;
-    let anchorVisibleIndex = orderedRows.findIndex((item) => item.row?.rowKey === anchorRowId);
-    if (anchorVisibleIndex < 0) {
-      anchorVisibleIndex = orderedRows.findIndex((item) => item.sourceIndex === startMeta.rowIndex);
-    }
-    if (anchorVisibleIndex < 0) {
-      anchorVisibleIndex = 0;
-    }
+    let anchorVisIdx = orderedRows.findIndex((item) => item.row?.rowKey === anchorRowId);
+    if (anchorVisIdx < 0) anchorVisIdx = 0;
 
-const pasteCount = Math.min(clipboardRows.length, MAX_AUTO_INSERT);
+    const pasteCount = Math.min(clipboardLines.length, MAX_AUTO_INSERT);
 
-      let targetRowKeys = orderedRows
-        .slice(anchorVisibleIndex, anchorVisibleIndex + pasteCount)
-        .map((item) => item.row?.rowKey)
-        .filter(Boolean);
+    // Recoger rowKeys de filas visibles desde el ancla
+    let targetRowKeys = orderedRows
+      .slice(anchorVisIdx, anchorVisIdx + pasteCount)
+      .map((item) => item.row?.rowKey)
+      .filter(Boolean);
 
-      if (pasteCount > targetRowKeys.length) {
-        const missingRows = pasteCount - targetRowKeys.length;
-        const lastVisibleSourceIndex = orderedRows.length > 0
-          ? Math.max(...orderedRows.map((item) => item.sourceIndex))
-          : block.rows.length - 1;
-        const insertAtIndex = lastVisibleSourceIndex + 1;
-        insertRows(startMeta.blockIndex, insertAtIndex, missingRows, { historyType: "paste" });
-        const currentBlock = blocks[startMeta.blockIndex];
-        const newRows = currentBlock?.rows?.slice(insertAtIndex, insertAtIndex + missingRows) || [];
-        targetRowKeys = targetRowKeys.concat(newRows.map((row) => row?.rowKey).filter(Boolean));
-
-        if (clipboardRows.length > MAX_AUTO_INSERT) {
-          showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
-        }
+    // Insertar filas nuevas si faltan destinos
+    if (pasteCount > targetRowKeys.length) {
+      const missing = pasteCount - targetRowKeys.length;
+      // Siempre al final de las filas visibles del mes, no en medio
+      const lastVisSourceIndex = orderedRows.length > 0
+        ? Math.max(...orderedRows.map((i) => i.sourceIndex))
+        : block.rows.length - 1;
+      insertRows(selectedMeta.blockIndex, lastVisSourceIndex + 1, missing, { historyType: "paste" });
+      const updatedBlock = blocks[selectedMeta.blockIndex];
+      const newRows = updatedBlock?.rows?.slice(lastVisSourceIndex + 1, lastVisSourceIndex + 1 + missing) || [];
+      targetRowKeys = targetRowKeys.concat(newRows.map((r) => r?.rowKey).filter(Boolean));
+      if (clipboardLines.length > MAX_AUTO_INSERT) {
+        showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
       }
+    }
 
-    const maxPasteRows = clipboardRows.length > 1
-      ? Math.min(clipboardRows.length, targetRowKeys.length)
+    const maxPaste = clipboardLines.length > 1
+      ? Math.min(clipboardLines.length, targetRowKeys.length)
       : 1;
 
-    for (let offset = 0; offset < maxPasteRows; offset += 1) {
-      const line = clipboardRows[offset];
-      const rowKey = targetRowKeys[offset];
-      const targetMeta = getCellMetaFromRowKey(rowKey, startMeta.columnKey);
-      if (!targetMeta) {
-        continue;
-      }
-
-      const targetCell = document.querySelector(
-        `[data-block-index="${targetMeta.blockIndex}"][data-row-index="${targetMeta.rowIndex}"][data-column-key="${targetMeta.columnKey}"]`
-      );
-      if (targetCell) {
-        setCellValue(targetCell, line, { type: "paste", groupKey: "paste" });
-      }
+    for (let i = 0; i < maxPaste; i++) {
+      const meta = getCellMetaFromRowKey(targetRowKeys[i], selectedMeta.columnKey);
+      const cell = meta ? getCellByMeta(meta) : null;
+      if (cell) setCellValue(cell, clipboardLines[i], { type: "paste", groupKey: "paste" });
     }
 
     renderRows();
 
-    if (DATE_COLUMNS.has(startMeta.columnKey)) {
-      const lastRowKey = maxPasteRows > 0 ? targetRowKeys[maxPasteRows - 1] : null;
-      const finalMeta = getCellMetaFromRowKey(lastRowKey, startMeta.columnKey);
-      const finalCell = finalMeta
-        ? document.querySelector(
-          `[data-block-index="${finalMeta.blockIndex}"][data-row-index="${finalMeta.rowIndex}"][data-column-key="${finalMeta.columnKey}"]`
-        )
-        : null;
-      if (finalCell) {
-        setSelectedCell(finalCell);
-        focusCellWithoutEditing(finalCell);
+    // Mover foco a la última celda pegada en columnas de fecha
+    if (DATE_COLUMNS.has(selectedMeta.columnKey) && maxPaste > 0) {
+      const lastMeta = getCellMetaFromRowKey(targetRowKeys[maxPaste - 1], selectedMeta.columnKey);
+      const lastCell = lastMeta ? getCellByMeta(lastMeta) : null;
+      if (lastCell) {
+        setSelectedCell(lastCell);
+        focusCellWithoutEditing(lastCell);
       }
     }
   });
