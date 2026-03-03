@@ -72,6 +72,7 @@ function newRow() {
   rowId += 1;
   return {
     rowKey: `row-${Date.now()}-${rowId}`,
+    _autoPlaceholder: false,
     id: "",
     blockType: "",
     listo: false,
@@ -120,6 +121,10 @@ function createBlock({
   const resolvedRows = Array.isArray(rows) && rows.length
     ? rows
     : [newRowForBlock(resolvedBlockType)];
+  
+  if (resolvedRows.length === 1 && !(Array.isArray(rows) && rows.length)) {
+    resolvedRows[0]._autoPlaceholder = true;
+  }
 
   return {
     id,
@@ -479,10 +484,11 @@ function applyPatch(patch, direction) {
     const nextRows = [...block.rows];
     if (direction === "forward") {
       nextRows.splice(patch.atIndex, patch.rows.length);
-      if (!nextRows.length) {
-        const fallbackBlockType = block.blockType || "";
-        nextRows.push(newRowForBlock(fallbackBlockType, currentCalendarContext));
-      }
+  if (!nextRows.length) {
+    const fallback = newRowForBlock(block.blockType, currentCalendarContext);
+    fallback._autoPlaceholder = true;
+    nextRows.push(fallback);
+  }
     } else {
       nextRows.splice(patch.atIndex, 0, ...cloneRows(patch.rows));
     }
@@ -2137,8 +2143,8 @@ function getOrderedRowsForMonth(block, calendarContext) {
 
 const visibleRows = indexedRows.filter((item) => item.isVisibleInCurrentMonth);
 
-  const nonPlaceholders = visibleRows.filter((item) => !isPlaceholderRow(item.row));
-  const placeholders = visibleRows.filter((item) => isPlaceholderRow(item.row));
+const nonPlaceholders = visibleRows.filter((item) => !item.row._autoPlaceholder);
+const placeholders = visibleRows.filter((item) => item.row._autoPlaceholder);
 
   if (sortState.key) {
     nonPlaceholders.sort((left, right) => {
