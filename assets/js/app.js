@@ -3519,28 +3519,26 @@ function handleGridPaste(event) {
       anchorVisibleIndex = 0;
     }
 
-const anchorIsPlaceholder = isPlaceholderRow(orderedRows[anchorVisibleIndex]?.row);
+const pasteCount = Math.min(clipboardRows.length, MAX_AUTO_INSERT);
 
-      let targetRowKeys = anchorIsPlaceholder
-        ? []
-        : orderedRows.slice(anchorVisibleIndex).map((item) => item.row?.rowKey).filter(Boolean);
+      let targetRowKeys = orderedRows
+        .slice(anchorVisibleIndex, anchorVisibleIndex + pasteCount)
+        .map((item) => item.row?.rowKey)
+        .filter(Boolean);
 
-      if (clipboardRows.length > targetRowKeys.length) {
-        const missingRows = clipboardRows.length - targetRowKeys.length;
-        const rowsToInsert = Math.min(missingRows, MAX_AUTO_INSERT);
-        if (rowsToInsert > 0) {
-          const maxSourceIndex = orderedRows.length > 0
-            ? Math.max(...orderedRows.map((item) => item.sourceIndex))
-            : block.rows.length - 1;
-          const insertAtIndex = maxSourceIndex + 1;
-          insertRows(startMeta.blockIndex, insertAtIndex, rowsToInsert, { historyType: "paste" });
-          const currentBlock = blocks[startMeta.blockIndex];
-          const newRows = currentBlock?.rows?.slice(insertAtIndex, insertAtIndex + rowsToInsert) || [];
-          targetRowKeys = targetRowKeys.concat(newRows.map((row) => row?.rowKey).filter(Boolean));
+      if (pasteCount > targetRowKeys.length) {
+        const missingRows = pasteCount - targetRowKeys.length;
+        const lastVisibleSourceIndex = orderedRows.length > 0
+          ? Math.max(...orderedRows.map((item) => item.sourceIndex))
+          : block.rows.length - 1;
+        const insertAtIndex = lastVisibleSourceIndex + 1;
+        insertRows(startMeta.blockIndex, insertAtIndex, missingRows, { historyType: "paste" });
+        const currentBlock = blocks[startMeta.blockIndex];
+        const newRows = currentBlock?.rows?.slice(insertAtIndex, insertAtIndex + missingRows) || [];
+        targetRowKeys = targetRowKeys.concat(newRows.map((row) => row?.rowKey).filter(Boolean));
 
-          if (missingRows > MAX_AUTO_INSERT) {
-            showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
-          }
+        if (clipboardRows.length > MAX_AUTO_INSERT) {
+          showGridToast(`Se han creado ${MAX_AUTO_INSERT} filas. El resto del pegado se ha recortado.`);
         }
       }
 
