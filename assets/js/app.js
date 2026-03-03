@@ -3272,7 +3272,7 @@ if (isArrowNavigationKey) {
       return;
     }
 
-    if (event.shiftKey && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+if (event.shiftKey && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       const meta = getCellMeta(selectedCell);
       if (!meta) return;
       event.preventDefault();
@@ -3280,35 +3280,41 @@ if (isArrowNavigationKey) {
       const block = blocks[meta.blockIndex];
       if (!block) return;
 
+      const orderedRows = getOrderedRowsForMonth(block, currentCalendarContext);
+      if (!orderedRows.length) return;
+
       if (
         !shiftSelectAnchor
         || shiftSelectAnchor.blockIndex !== meta.blockIndex
         || shiftSelectAnchor.columnKey !== meta.columnKey
+        || shiftSelectAnchor.anchorSourceIndex !== meta.rowIndex
       ) {
+        const anchorVisIdx = orderedRows.findIndex((item) => item.sourceIndex === meta.rowIndex);
+        if (anchorVisIdx < 0) return;
         shiftSelectAnchor = {
           blockIndex: meta.blockIndex,
-          rowIndex: meta.rowIndex,
           columnKey: meta.columnKey,
+          anchorSourceIndex: meta.rowIndex,
+          anchorVisibleIndex: anchorVisIdx,
+          activeVisibleIndex: anchorVisIdx,
         };
       }
 
-      let activeEnd;
-      if (dragSelection && dragSelection.blockIndex === meta.blockIndex && dragSelection.col === meta.columnKey) {
-        activeEnd = shiftSelectAnchor.rowIndex === dragSelection.r1
-          ? dragSelection.r2
-          : dragSelection.r1;
-      } else {
-        activeEnd = meta.rowIndex;
-      }
-
       const delta = event.key === "ArrowDown" ? 1 : -1;
-      const nextEnd = Math.max(0, Math.min(block.rows.length - 1, activeEnd + delta));
+      shiftSelectAnchor.activeVisibleIndex = Math.max(
+        0,
+        Math.min(orderedRows.length - 1, shiftSelectAnchor.activeVisibleIndex + delta)
+      );
+
+      const minVis = Math.min(shiftSelectAnchor.anchorVisibleIndex, shiftSelectAnchor.activeVisibleIndex);
+      const maxVis = Math.max(shiftSelectAnchor.anchorVisibleIndex, shiftSelectAnchor.activeVisibleIndex);
+      const selectedSourceIndices = orderedRows.slice(minVis, maxVis + 1).map((item) => item.sourceIndex);
 
       dragSelection = {
         blockIndex: meta.blockIndex,
         col: meta.columnKey,
-        r1: Math.min(shiftSelectAnchor.rowIndex, nextEnd),
-        r2: Math.max(shiftSelectAnchor.rowIndex, nextEnd),
+        r1: Math.min(...selectedSourceIndices),
+        r2: Math.max(...selectedSourceIndices),
       };
 
       renderDragSelectionPreview(dragSelection);
