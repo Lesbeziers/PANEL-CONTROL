@@ -55,6 +55,7 @@ const DATE_COLUMNS = new Set(["startDate", "endDate"]);
 const DEFAULT_MAX_SIMULTANEOUS = 5;
 const GLOBAL_COLLAPSE_BUTTON_ID = "global-collapse-toggle";
 const ENABLE_EXCEL_IMPORT = window.PANEL_FEATURES?.excelImportV2 !== false;
+const GITHUB_EXCEL_URL = "https://raw.githubusercontent.com/Lesbeziers/PANEL-CONTROL/main/assets/excel/PANEL_CONTROL_DATA.xlsx";
 const EXCEL_BLOCK_HEADER_CANDIDATES = ["BLOQUE", "TIPO BLOQUE", "TIPO", "FORMATO"];
 
 const EXCEL_COLUMN_ALIASES = {
@@ -4627,7 +4628,6 @@ function renderMonthBlockGrid(root) {
 
       <div class="panel-layout__toolbar" aria-label="Acciones del panel">
         <div class="panel-layout__toolbar-inner">
-          <button type="button" class="import-excel-btn">IMPORTAR EXCEL</button>
           <div class="export-excel-wrapper">
             <button type="button" class="export-excel-btn">EXPORTAR EXCEL <span class="export-excel-btn__arrow">▾</span></button>
             <div class="export-excel-menu" id="export-excel-menu" role="menu">
@@ -4732,7 +4732,6 @@ function renderMonthBlockGrid(root) {
   document.addEventListener("pointercancel", handleGridPointerCancel);
   gridRoot?.addEventListener("click", handleGridClickCapture, true);
   ensureFillHandleElement();
-  attachExcelImportControls(root);
   attachExcelExportControls(root);
   attachSearchControls(root);
   
@@ -4914,4 +4913,48 @@ leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockI
   updateGlobalCollapseButtonState();
 }
 
+async function autoLoadFromGitHub() {
+  if (!window.XLSX) {
+    showGridToast("No se pudo cargar la librería de Excel");
+    return;
+  }
+
+  showGridToast("Cargando datos desde GitHub...");
+
+  try {
+    const response = await fetch(GITHUB_EXCEL_URL, { credentials: "omit" });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const buffer = await response.arrayBuffer();
+    const workbook = window.XLSX.read(buffer, { type: "array", cellDates: false });
+    const sheetsWithData = workbook.SheetNames.filter((name) => workbook.Sheets[name]);
+    if (!sheetsWithData.length) {
+      showGridToast("No se encontró ninguna hoja en el archivo");
+      return;
+    }
+
+    const savedContext = { ...currentCalendarContext };
+
+    sheetsWithData.forEach((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
+      const matrix = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
+      const sheetContext = resolveContextFromSheetName(sheetName);
+      if (sheetContext) {
+        currentCalendarContext = sheetContext;
+      }
+      importRowsFromExcelMatrix(matrix);
+    });
+
+    currentCalendarContext = savedContext;
+    applyCalendarContextToView(document);
+
+  } catch (err) {
+    showGridToast("No se pudo cargar el Excel desde GitHub");
+    console.error("autoLoadFromGitHub error:", err);
+  }
+}
+
 renderMonthBlockGrid(document.getElementById("app"));
+autoLoadFromGitHub();
