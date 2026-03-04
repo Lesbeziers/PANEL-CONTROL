@@ -2355,6 +2355,28 @@ function setCellValue(cell, rawValue, historyOptions = {}) {
     if (checkbox) {
       checkbox.checked = row.listo;
     }
+    // Sincronizar el checkbox del header del bloque
+    const blockIndex = Number.parseInt(cell.dataset.blockIndex, 10);
+    if (!Number.isNaN(blockIndex) && blocks[blockIndex]) {
+      const block = blocks[blockIndex];
+      const allListo = block.rows.length > 0 && block.rows.every((r) => !!r.listo);
+      const leftBody = document.getElementById("left-body");
+      if (leftBody) {
+        const groupRows = leftBody.querySelectorAll(".left-row--group");
+        // Los group rows incluyen separadores, hay que encontrar el correcto por blockIndex
+        let groupCount = -1;
+        for (const groupRow of groupRows) {
+          if (!groupRow.classList.contains("left-row--section-separator")) {
+            groupCount++;
+            if (groupCount === blockIndex) {
+              const blockCheckbox = groupRow.querySelector(".listo-checkbox");
+              if (blockCheckbox) { blockCheckbox.checked = allListo; }
+              break;
+            }
+          }
+        }
+      }
+    }
   } else if (DATE_COLUMNS.has(meta.columnKey)) {
     applyDateCellValue(row, meta.columnKey, parsedValue);
     renderDateCell(cell, row, meta.columnKey);
