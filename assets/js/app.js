@@ -56,6 +56,7 @@ const DEFAULT_MAX_SIMULTANEOUS = 5;
 const GLOBAL_COLLAPSE_BUTTON_ID = "global-collapse-toggle";
 const ENABLE_EXCEL_IMPORT = window.PANEL_FEATURES?.excelImportV2 !== false;
 const GITHUB_EXCEL_URL = "https://raw.githubusercontent.com/Lesbeziers/PANEL-CONTROL/main/assets/excel/PANEL_CONTROL_DATA.xlsx";
+const IS_VIEWER_MODE = window.PANEL_FEATURES?.viewerMode === true;
 const EXCEL_BLOCK_HEADER_CANDIDATES = ["BLOQUE", "TIPO BLOQUE", "TIPO", "FORMATO"];
 
 const EXCEL_COLUMN_ALIASES = {
@@ -1911,6 +1912,15 @@ async function exportExcelAplicativo() {
 }
 
 function attachExcelExportControls(root) {
+  // Viewer mode: botón único directo
+  if (IS_VIEWER_MODE) {
+    const viewerBtn = root.querySelector(".export-excel-btn--viewer");
+    if (viewerBtn) {
+      viewerBtn.addEventListener("click", () => exportExcelAplicativo());
+    }
+    return;
+  }
+
   const exportWrapper = root.querySelector(".export-excel-wrapper");
   const exportButton = root.querySelector(".export-excel-btn");
   const exportMenu = root.querySelector("#export-excel-menu");
@@ -3140,6 +3150,7 @@ function handleFillDragCancel() {
 }
 
 function startFillDrag(event) {
+  if (IS_VIEWER_MODE) { return; }
   if (event.button !== 0 || !selectedCell || editingCell) {
     return;
   }
@@ -3199,6 +3210,7 @@ function handleGridEnterKey(event) {
     || (event.ctrlKey && !event.metaKey && keyLower === "y");
 
   if (isUndoShortcut || isRedoShortcut) {
+    if (IS_VIEWER_MODE) { return; }
     const activeElement = document.activeElement;
     const editingNative = isEditingElement(activeElement) && !(activeElement?.classList?.contains("editor-overlay"));
     if (editingNative) {
@@ -3420,6 +3432,7 @@ if (event.shiftKey && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
   }
 
     if ((event.ctrlKey || event.metaKey) && (event.key === "Delete" || event.key === "Backspace")) {
+    if (IS_VIEWER_MODE) { return; }
     if (isEditingElement(document.activeElement)) {
       return;
     }
@@ -3435,6 +3448,7 @@ if (event.shiftKey && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
   }
 
   if (isPrintableKey && typeof selectedCell.openEditMode === "function") {
+    if (IS_VIEWER_MODE) { return; }
     const column = getColumnByKey(selectedCell.dataset.columnKey);
     if (column?.cellType === "select") {
       event.preventDefault();
@@ -3462,6 +3476,7 @@ if (event.shiftKey && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
   }
 
 if ((event.key === "Delete" || event.key === "Backspace") && selectedCell) {
+    if (IS_VIEWER_MODE) { return; }
     const selectedRowIndex = Number.parseInt(selectedCell.dataset.rowIndex, 10);
     const hasVerticalRangeSelection =
       !!dragSelection
@@ -3507,6 +3522,7 @@ if ((event.key === "Delete" || event.key === "Backspace") && selectedCell) {
 }
 
 function handleGridPaste(event) {
+  if (IS_VIEWER_MODE) { return; }
   if (!selectedCell || editingCell) return;
 
   const pastedText = event.clipboardData?.getData("text/plain") || "";
@@ -3641,6 +3657,7 @@ function attachDateCell(cell, row, columnKey) {
   const render = () => renderDateCell(cell, row, columnKey);
 
   const openEditMode = ({ replaceWith, keepContent = false } = {}) => {
+    if (IS_VIEWER_MODE) { return; }
     if (editingCell?.cell === cell) {
       return;
     }
@@ -3712,6 +3729,7 @@ function attachGenreCell(cell, row) {
   };
 
   const openEditMode = ({ keepContent = false, replaceWith } = {}) => {
+    if (IS_VIEWER_MODE) { return; }
     if (editingCell?.cell === cell) {
       return;
     }
@@ -4167,6 +4185,7 @@ function closeContextMenu() {
 }
 
 function openContextMenu(event, blockIndex, rowIndex) {
+  if (IS_VIEWER_MODE) { event.preventDefault(); return; }
   event.preventDefault();
 
   contextMenu = {
@@ -4267,6 +4286,7 @@ function attachListoCheckbox(cell, row) {
   input.setAttribute("aria-label", "Marcar LISTO");
 
   const toggleListo = (nextValue = !row.listo) => {
+    if (IS_VIEWER_MODE) { return; }
     setCellValue(cell, nextValue ? "true" : "", { type: "toggle", groupKey: `${cell.dataset.blockIndex}:${cell.dataset.rowIndex}:listo` });
     input.checked = row.listo;
   };
@@ -4311,6 +4331,7 @@ function attachBlockListoCheckbox(cell, block) {
   };
 
   const toggleBlock = () => {
+    if (IS_VIEWER_MODE) { return; }
     const targetValue = !(block.rows.length > 0 && block.rows.every((row) => !!row.listo));
     withHistoryAction("toggle", { groupKey: `toggle-block:${block.id}` }, () => {
       block.rows.forEach((row, rowIndex) => {
@@ -4393,6 +4414,10 @@ function attachTitleCell(cell, row) {
   };
 
   const openEditMode = ({ replaceWith, keepContent = false } = {}) => {
+    if (IS_VIEWER_MODE) {
+      if (editingCell?.input) { editingCell.input.focus(); }
+      return;
+    }
     if (isEditing) {
       if (editingCell?.input) {
         editingCell.input.focus();
@@ -4539,6 +4564,7 @@ function attachIdTextCell(cell, row) {
   };
 
   const openEditMode = ({ replaceWith, keepContent = false } = {}) => {
+    if (IS_VIEWER_MODE) { return; }
     if (editingCell?.cell === cell) {
       return;
     }
@@ -4628,6 +4654,9 @@ function renderMonthBlockGrid(root) {
 
       <div class="panel-layout__toolbar" aria-label="Acciones del panel">
         <div class="panel-layout__toolbar-inner">
+          ${IS_VIEWER_MODE ? `
+          <button type="button" class="export-excel-btn export-excel-btn--viewer" data-export="aplicativo">EXPORTAR APLICATIVO</button>
+          ` : `
           <div class="export-excel-wrapper">
             <button type="button" class="export-excel-btn">EXPORTAR EXCEL <span class="export-excel-btn__arrow">▾</span></button>
             <div class="export-excel-menu" id="export-excel-menu" role="menu">
@@ -4635,6 +4664,7 @@ function renderMonthBlockGrid(root) {
               <button type="button" class="export-excel-menu__item" data-export="aplicativo" role="menuitem">Para Aplicativo</button>
             </div>
           </div>
+          `}
           <div class="search-box-wrapper">
             <span class="search-box-icon" aria-hidden="true">⌕</span>
             <input type="text" class="search-box-input" placeholder="Buscar título..." autocomplete="off" aria-label="Buscar en el panel" />
@@ -4731,7 +4761,7 @@ function renderMonthBlockGrid(root) {
   document.addEventListener("pointerup", handleGridPointerUp);
   document.addEventListener("pointercancel", handleGridPointerCancel);
   gridRoot?.addEventListener("click", handleGridClickCapture, true);
-  ensureFillHandleElement();
+  if (!IS_VIEWER_MODE) { ensureFillHandleElement(); }
   attachExcelExportControls(root);
   attachSearchControls(root);
   
