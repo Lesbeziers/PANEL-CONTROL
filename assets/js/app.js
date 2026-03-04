@@ -2359,7 +2359,8 @@ function setCellValue(cell, rawValue, historyOptions = {}) {
     const blockIndex = Number.parseInt(cell.dataset.blockIndex, 10);
     if (!Number.isNaN(blockIndex) && blocks[blockIndex]) {
       const block = blocks[blockIndex];
-      const allListo = block.rows.length > 0 && block.rows.every((r) => !!r.listo);
+      const realRows = block.rows.filter((r) => !r._autoPlaceholder);
+      const allListo = realRows.length > 0 && realRows.every((r) => !!r.listo);
       const leftBody = document.getElementById("left-body");
       if (leftBody) {
         const groupRows = leftBody.querySelectorAll(".left-row--group");
@@ -4358,12 +4359,14 @@ function attachBlockListoCheckbox(cell, block) {
   input.setAttribute("aria-label", `Marcar LISTO para todo el bloque ${block.blockType}`);
 
   const syncInputState = () => {
-    input.checked = block.rows.length > 0 && block.rows.every((row) => !!row.listo);
+    const realRows = block.rows.filter((r) => !r._autoPlaceholder);
+    input.checked = realRows.length > 0 && realRows.every((row) => !!row.listo);
   };
 
   const toggleBlock = () => {
     if (IS_VIEWER_MODE) { return; }
-    const targetValue = !(block.rows.length > 0 && block.rows.every((row) => !!row.listo));
+    const realRows = block.rows.filter((r) => !r._autoPlaceholder);
+    const targetValue = !(realRows.length > 0 && realRows.every((row) => !!row.listo));
     withHistoryAction("toggle", { groupKey: `toggle-block:${block.id}` }, () => {
       block.rows.forEach((row, rowIndex) => {
         const before = getCellRawValue(row, "listo");
