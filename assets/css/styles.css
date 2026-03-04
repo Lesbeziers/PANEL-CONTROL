@@ -1268,3 +1268,12 @@ body {
   pointer-events: none;
   cursor: default;
 }
+
+/* Viewer: ocultar checkboxes no marcados */
+.is-viewer-mode .listo-checkbox:not(:checked) {
+  visibility: hidden;
+}
+
+.is-viewer-mode .block-toggle-checkbox:not(:checked) {
+  visibility: hidden;
+}
