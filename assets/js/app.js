@@ -1055,6 +1055,7 @@ function openDeleteConfirmModal(target, triggerElement = document.activeElement)
 }
 
 function setSelectedCell(cell) {
+  if (IS_VIEWER_MODE) { return; }
   if (selectedCell && selectedCell !== cell && selectedCell.isConnected) {
     selectedCell.classList.remove("is-selected");
   }
@@ -2868,6 +2869,7 @@ function resetDragSelectState() {
 }
 
 function handleGridPointerDown(event) {
+  if (IS_VIEWER_MODE) { return; }
   if (event.button !== 0 || fillDragState || editingCell) {
     return;
   }
@@ -4277,13 +4279,20 @@ function createDayRow(group = false) {
 function attachListoCheckbox(cell, row) {
   cell.classList.add("checkbox-cell");
   cell.textContent = "";
-  cell.tabIndex = 0;
+  cell.tabIndex = IS_VIEWER_MODE ? -1 : 0;
 
   const input = document.createElement("input");
   input.type = "checkbox";
   input.className = "listo-checkbox";
   input.checked = !!row.listo;
   input.setAttribute("aria-label", "Marcar LISTO");
+
+  if (IS_VIEWER_MODE) {
+    input.disabled = true;
+    input.style.pointerEvents = "none";
+    cell.appendChild(input);
+    return;
+  }
 
   const toggleListo = (nextValue = !row.listo) => {
     if (IS_VIEWER_MODE) { return; }
@@ -4633,6 +4642,7 @@ function attachIdTextCell(cell, row) {
 }
 
 function renderMonthBlockGrid(root) {
+  if (IS_VIEWER_MODE) { document.body.classList.add("is-viewer-mode"); }
   const monthTitle = getMonthTitleText(DEFAULT_CALENDAR_CONTEXT.month, DEFAULT_CALENDAR_CONTEXT.year);
   const monthAriaLabel = getMonthAriaLabel(DEFAULT_CALENDAR_CONTEXT.month, DEFAULT_CALENDAR_CONTEXT.year);
   
@@ -4860,6 +4870,7 @@ if (searchQuery && !blockHasMatchForSearch(block, searchQuery)) {
 
     const orderedRows = getOrderedRowsForMonth(block, currentCalendarContext);
     orderedRows.forEach(({ row, sourceIndex }) => {
+      if (IS_VIEWER_MODE && row._autoPlaceholder) { return; }
       const leftRow = createLeftRow();
       const dayRow = createDayRow();
       
