@@ -33,7 +33,6 @@
   const BAND_COLOR_YELLOW = "#fbdd9a";
   const HEADER_COLOR_GREEN = "#8fb596";
   const HEADER_COLOR_YELLOW = "#e8cd8e";
-  const DEBUG_PASTE = true;
   const MONTH_LABEL_TO_NUMBER = {
     enero: 1,
     febrero: 2,
@@ -236,9 +235,7 @@
 
       const currentHash = getStartEndHash(root);
       const elapsedMs = Math.round(performance.now() - startedAt);
-      if (DEBUG_PASTE) {
-        console.log("[gantt][paste] repaint iter", iteration, "hash", currentHash, "ms", elapsedMs);
-      }
+
 
       if (currentHash === previousHash) {
         stableIterations += 1;
@@ -247,19 +244,12 @@
       }
 
       if (stableIterations >= 2) {
-        if (DEBUG_PASTE) {
-          console.log("[gantt][paste] stable after", iteration, "iterations and", elapsedMs, "ms");
-        }
         return;
       }
 
       previousHash = currentHash;
     }
 
-    if (DEBUG_PASTE) {
-      const elapsedMs = Math.round(performance.now() - startedAt);
-      console.log("[gantt][paste] stop by maxMs after", iteration, "iterations and", elapsedMs, "ms");
-    }
   }
   function parseDayLabel(value) {
     const normalized = (value || "").trim();
@@ -1617,10 +1607,6 @@
       const targetInsideMonthBlock = eventTarget?.closest?.(".month-block") || root.contains(eventTarget);
       if (!targetInsideMonthBlock) {
         return;
-      }
-
-      if (DEBUG_PASTE) {
-        console.log("[gantt][paste] detected", event.type, "on", event.target);
       }
 
       repaintUntilStable(root, { maxMs: 600 });
