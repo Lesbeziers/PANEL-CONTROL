@@ -55,7 +55,6 @@ const DATE_COLUMNS = new Set(["startDate", "endDate"]);
 const DEFAULT_MAX_SIMULTANEOUS = 5;
 const GLOBAL_COLLAPSE_BUTTON_ID = "global-collapse-toggle";
 const ENABLE_EXCEL_IMPORT = window.PANEL_FEATURES?.excelImportV2 !== false;
-const GITHUB_EXCEL_URL = "https://raw.githubusercontent.com/Lesbeziers/PANEL-CONTROL/main/assets/excel/PANEL_CONTROL_DATA.xlsx";
 const IS_VIEWER_MODE = window.PANEL_FEATURES?.viewerMode === true;
 const EXCEL_BLOCK_HEADER_CANDIDATES = ["BLOQUE", "TIPO BLOQUE", "TIPO", "FORMATO"];
 
@@ -1528,6 +1527,9 @@ function importRowsFromExcelMatrix(matrix) {
       return;
     }
 
+    if (targetBlock.rows.every((r) => r._autoPlaceholder)) {
+      targetBlock.rows.length = 0;
+    }
     targetBlock.rows.push(importedRow);
     importedCount += 1;
   });
@@ -1649,10 +1651,9 @@ function attachExcelImportControls(root) {
   });
 }
 
-async function exportExcelEdicion() {
+async function buildExcelEdicionBuffer() {
   if (!window.ExcelJS) {
-    showGridToast("No se pudo cargar la librería ExcelJS");
-    return;
+    throw new Error("ExcelJS no cargado");
   }
 
   // Mapa de colores UI → colores Excel (ARGB)
@@ -1755,24 +1756,24 @@ async function exportExcelEdicion() {
     });
   });
 
-  // Generar y descargar
   const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  const pad = (n) => String(n).padStart(2, "0");
-  const now = new Date();
-  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
-  a.download = `PANEL_CONTROL_DATA_${stamp}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  return { buffer, sheetCount: sortedMonths.length };
+}
 
-  showGridToast(`Excel exportado · ${sortedMonths.length} hoja(s)`);
+async function saveToGoogleDrive() {
+  if (!window.GoogleDrive) {
+    showGridToast("Servicio no disponible");
+    return;
+  }
+  showGridToast("Guardando...");
+  try {
+    const { buffer, sheetCount } = await buildExcelEdicionBuffer();
+    await window.GoogleDrive.saveXlsxBuffer(buffer);
+    showGridToast(`Guardado · ${sheetCount} hoja(s)`);
+  } catch (err) {
+    console.error("saveToGoogleDrive error:", err);
+    showGridToast("Error al guardar");
+  }
 }
 
 async function exportExcelAplicativo() {
@@ -1913,77 +1914,24 @@ async function exportExcelAplicativo() {
 }
 
 function attachExcelExportControls(root) {
-  // Viewer mode: botón único directo
-  if (IS_VIEWER_MODE) {
-    const viewerBtn = root.querySelector(".export-excel-btn--viewer");
-    if (viewerBtn) {
-      viewerBtn.addEventListener("click", () => exportExcelAplicativo());
-    }
-    return;
+  const exportBtn = root.querySelector(".export-excel-btn");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", () => exportExcelAplicativo());
   }
 
-  const exportWrapper = root.querySelector(".export-excel-wrapper");
-  const exportButton = root.querySelector(".export-excel-btn");
-  const exportMenu = root.querySelector("#export-excel-menu");
-  if (!exportWrapper || !exportButton || !exportMenu) {
-    return;
+  if (IS_VIEWER_MODE) return;
+
+  const saveDriveBtn = root.querySelector("#save-drive-btn");
+  if (saveDriveBtn) {
+    saveDriveBtn.addEventListener("click", async () => {
+      saveDriveBtn.disabled = true;
+      try {
+        await saveToGoogleDrive();
+      } finally {
+        saveDriveBtn.disabled = false;
+      }
+    });
   }
-
-  let isOpen = false;
-
-  const openMenu = () => {
-    isOpen = true;
-    exportMenu.classList.add("open");
-    exportButton.setAttribute("aria-expanded", "true");
-    document.addEventListener("mousedown", handleOutsideClick);
-    document.addEventListener("keydown", handleMenuKeydown);
-  };
-
-  const closeMenu = () => {
-    isOpen = false;
-    exportMenu.classList.remove("open");
-    exportButton.setAttribute("aria-expanded", "false");
-    document.removeEventListener("mousedown", handleOutsideClick);
-    document.removeEventListener("keydown", handleMenuKeydown);
-  };
-
-  const handleOutsideClick = (event) => {
-    if (!exportWrapper.contains(event.target)) {
-      closeMenu();
-    }
-  };
-
-  const handleMenuKeydown = (event) => {
-    if (event.key === "Escape") {
-      closeMenu();
-      exportButton.focus();
-    }
-  };
-
-  exportButton.setAttribute("aria-haspopup", "true");
-  exportButton.setAttribute("aria-expanded", "false");
-
-  exportButton.addEventListener("click", () => {
-    if (isOpen) {
-      closeMenu();
-    } else {
-      openMenu();
-    }
-  });
-
-exportMenu.addEventListener("click", (event) => {
-    const item = event.target.closest("[data-export]");
-    if (!item) {
-      return;
-    }
-    const mode = item.dataset.export;
-    closeMenu();
-    if (mode === "edicion") {
-      exportExcelEdicion();
-    } else {
-      exportExcelAplicativo();
-    }
-  });
 }
 
 function parseISODateValue(value) {
@@ -2179,7 +2127,10 @@ const placeholders = visibleRows.filter((item) => item.row._autoPlaceholder);
     });
   }
 
-  const orderedVisibleRows = [...nonPlaceholders, ...placeholders];
+  const allowedPlaceholders = nonPlaceholders.length > 0
+    ? placeholders.filter((item) => !isPlaceholderRow(item.row))
+    : placeholders;
+  const orderedVisibleRows = [...nonPlaceholders, ...allowedPlaceholders];
 
   if (orderedVisibleRows.length) {
     return orderedVisibleRows;
@@ -2187,6 +2138,7 @@ const placeholders = visibleRows.filter((item) => item.row._autoPlaceholder);
 
   // Fallback: bloque vacío → crear fila placeholder
   const fallbackRow = newRowForBlock(block.blockType, calendarContext);
+  fallbackRow._autoPlaceholder = true;
   block.rows.push(fallbackRow);
 
   return [{
@@ -4695,17 +4647,10 @@ function renderMonthBlockGrid(root) {
 
       <div class="panel-layout__toolbar" aria-label="Acciones del panel">
         <div class="panel-layout__toolbar-inner">
-          ${IS_VIEWER_MODE ? `
-          <button type="button" class="export-excel-btn export-excel-btn--viewer" data-export="aplicativo">EXPORTAR APLICATIVO</button>
-          ` : `
-          <div class="export-excel-wrapper">
-            <button type="button" class="export-excel-btn">EXPORTAR EXCEL <span class="export-excel-btn__arrow">▾</span></button>
-            <div class="export-excel-menu" id="export-excel-menu" role="menu">
-              <button type="button" class="export-excel-menu__item" data-export="edicion" role="menuitem">Para Edición</button>
-              <button type="button" class="export-excel-menu__item" data-export="aplicativo" role="menuitem">Para Aplicativo</button>
-            </div>
-          </div>
+          ${IS_VIEWER_MODE ? `` : `
+          <button type="button" class="save-drive-btn" id="save-drive-btn">GUARDAR</button>
           `}
+          <button type="button" class="export-excel-btn export-excel-btn--viewer" data-export="aplicativo">EXPORTAR APLICATIVO</button>
           <div class="search-box-wrapper">
             <span class="search-box-icon" aria-hidden="true">⌕</span>
             <input type="text" class="search-box-input" placeholder="Buscar título..." autocomplete="off" aria-label="Buscar en el panel" />
@@ -4985,21 +4930,35 @@ leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockI
   updateGlobalCollapseButtonState();
 }
 
-async function autoLoadFromGitHub() {
+async function autoLoadFromDrive() {
   if (!window.XLSX) {
     showGridToast("No se pudo cargar la librería de Excel");
     return;
   }
+  if (!window.GoogleDrive && !IS_VIEWER_MODE) {
+    showGridToast("Servicio no disponible");
+    return;
+  }
 
-  showGridToast("Cargando datos desde GitHub...");
+  showGridToast("Cargando datos...");
 
   try {
-    const response = await fetch(GITHUB_EXCEL_URL, { credentials: "omit" });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    let buffer;
+    if (window.GoogleDrive) {
+      buffer = await window.GoogleDrive.loadXlsxBuffer({ useAuth: !IS_VIEWER_MODE });
+    } else {
+      // Fallback para visor sin gdrive.js: fetch directo con API key
+      const FILE_ID = window.PANEL_CONFIG?.GOOGLE_DRIVE_FILE_ID;
+      const API_KEY = window.PANEL_CONFIG?.GOOGLE_API_KEY;
+      if (!FILE_ID || !API_KEY) {
+        throw new Error("PANEL_CONFIG missing");
+      }
+      const url = `https://www.googleapis.com/drive/v3/files/${FILE_ID}?alt=media&key=${API_KEY}`;
+      const response = await fetch(url, { credentials: "omit" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      buffer = await response.arrayBuffer();
     }
 
-    const buffer = await response.arrayBuffer();
     const workbook = window.XLSX.read(buffer, { type: "array", cellDates: false });
     const sheetsWithData = workbook.SheetNames.filter((name) => workbook.Sheets[name]);
     if (!sheetsWithData.length) {
@@ -5023,10 +4982,32 @@ async function autoLoadFromGitHub() {
     applyCalendarContextToView(document);
 
   } catch (err) {
-    showGridToast("No se pudo cargar el Excel desde GitHub");
-    console.error("autoLoadFromGitHub error:", err);
+    showGridToast("No se pudo cargar el Excel");
+    console.error("autoLoadFromDrive error:", err);
   }
 }
 
 renderMonthBlockGrid(document.getElementById("app"));
-autoLoadFromGitHub();
+
+if (IS_VIEWER_MODE) {
+  autoLoadFromDrive();
+} else {
+  // Editor: requiere sign-in OAuth antes de cargar datos.
+  if (window.GoogleDrive?.isSignedIn?.()) {
+    autoLoadFromDrive();
+  } else {
+    document.addEventListener("gdrive:signedin", autoLoadFromDrive, { once: true });
+    if (window.GoogleDrive?.showGate) {
+      window.GoogleDrive.showGate();
+    } else {
+      // GIS aún no disponible — esperar y reintentar
+      const waitInterval = setInterval(() => {
+        if (window.GoogleDrive?.showGate) {
+          clearInterval(waitInterval);
+          window.GoogleDrive.showGate();
+        }
+      }, 100);
+      setTimeout(() => clearInterval(waitInterval), 10000);
+    }
+  }
+}

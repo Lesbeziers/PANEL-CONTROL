@@ -221,7 +221,8 @@ body {
   margin-left: 0px;
 }
 
-.export-excel-btn {
+.export-excel-btn,
+.save-drive-btn {
   appearance: none;
   border: 1px solid #333333;
   background: #ffffff;
@@ -242,9 +243,20 @@ body {
   transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
+.save-drive-btn {
+  margin-right: 8px;
+}
+
+.save-drive-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .export-excel-btn:hover,
 .export-excel-btn:focus-visible,
-.export-excel-btn[aria-expanded="true"] {
+.export-excel-btn[aria-expanded="true"],
+.save-drive-btn:hover,
+.save-drive-btn:focus-visible {
   border-color: #333333;
   background: #333333;
   color: #ffffff;
