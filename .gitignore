@@ -1,0 +1,12 @@
+# macOS metadata
+.DS_Store
+._*
+
+# OS / IDE local
+.vscode/
+.idea/
+Thumbs.db
+
+# Logs / temp
+*.log
+*.tmp
