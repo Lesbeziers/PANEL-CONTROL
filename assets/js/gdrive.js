@@ -86,7 +86,10 @@
       console.error("[gdrive] GIS not loaded yet, cannot sign in");
       return;
     }
-    tokenClient.requestAccessToken({ prompt: opts.silent ? "" : "consent" });
+    // prompt="" → Google muestra solo lo estrictamente necesario:
+    //   - Si nunca se ha consentido: muestra consentimiento.
+    //   - Si ya hay consent server-side: lo salta (mejor UX).
+    tokenClient.requestAccessToken({ prompt: "" });
   }
 
   function signOut() {
