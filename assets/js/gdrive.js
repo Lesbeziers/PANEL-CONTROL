@@ -137,10 +137,22 @@
 
   async function showPickerForAuth(token) {
     await loadPicker();
-    return new Promise((resolve, reject) => {
+
+    // El primer uso de la API key + Picker desde un edge concreto de Google
+    // a veces dispara "La clave de desarrollador no es válida" por
+    // propagación de cachés. Se manifiesta como CANCEL inmediato del picker.
+    // Reintentamos en silencio hasta 2 veces si detectamos cierre rápido.
+    const MAX_ATTEMPTS = 3;
+    const TRANSIENT_THRESHOLD_MS = 2500;
+    const RETRY_DELAY_MS = 1500;
+
+    const tryShow = (attempt) => new Promise((resolve, reject) => {
+      const openedAt = Date.now();
+
       const view = new google.picker.DocsView()
         .setIncludeFolders(false)
         .setMimeTypes(MIME_XLSX)
+        .setQuery("PANEL_CONTROL_DATA")
         .setMode(google.picker.DocsViewMode.LIST);
 
       const picker = new google.picker.PickerBuilder()
@@ -162,12 +174,26 @@
               ));
             }
           } else if (data.action === google.picker.Action.CANCEL) {
-            reject(new Error("Selección de archivo cancelada"));
+            const elapsed = Date.now() - openedAt;
+            const looksTransient = elapsed < TRANSIENT_THRESHOLD_MS && attempt < MAX_ATTEMPTS;
+            if (looksTransient) {
+              console.warn(
+                `[gdrive] Picker cerrado en ${elapsed}ms (intento ${attempt}/${MAX_ATTEMPTS}). ` +
+                `Probable error transitorio de Google, reintentando…`
+              );
+              setTimeout(() => {
+                tryShow(attempt + 1).then(resolve).catch(reject);
+              }, RETRY_DELAY_MS);
+            } else {
+              reject(new Error("Selección de archivo cancelada"));
+            }
           }
         })
         .build();
       picker.setVisible(true);
     });
+
+    return tryShow(1);
   }
 
   async function loadXlsxBuffer({ useAuth = false } = {}) {
