@@ -8,13 +8,17 @@
   const FILE_ID = config.GOOGLE_DRIVE_FILE_ID;
   const API_KEY = config.GOOGLE_API_KEY;
   const CLIENT_ID = config.GOOGLE_CLIENT_ID;
-  const SCOPE = "https://www.googleapis.com/auth/drive";
+  // Project number = primera parte del CLIENT_ID antes del primer guion.
+  // Necesario para que el Picker asocie el grant drive.file con este cliente OAuth.
+  const APP_ID = CLIENT_ID.split("-")[0];
+  const SCOPE = "https://www.googleapis.com/auth/drive.file";
   const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
   let tokenClient = null;
   let accessToken = null;
   let tokenExpiresAt = 0;
   let pendingTokenResolvers = [];
+  let pickerLoaded = false;
 
   window.GoogleDrive = {
     init,
@@ -38,7 +42,7 @@
     return true;
   }
 
-  function handleTokenResponse(resp) {
+  async function handleTokenResponse(resp) {
     if (resp.error) {
       console.error("[gdrive] token error:", resp);
       pendingTokenResolvers.forEach((p) => p.reject(new Error(resp.error)));
@@ -47,6 +51,26 @@
     }
     accessToken = resp.access_token;
     tokenExpiresAt = Date.now() + (Number(resp.expires_in) - 60) * 1000;
+
+    // drive.file: comprobar que el archivo del panel está autorizado.
+    // Si no lo está (primer login con esta cuenta), mostrar Picker para que
+    // el usuario lo seleccione → eso concede el permiso per-file.
+    try {
+      const accessible = await checkFileAccess(accessToken);
+      if (!accessible) {
+        hideGate();
+        await showPickerForAuth(accessToken);
+      }
+    } catch (err) {
+      console.error("[gdrive] file authorization failed:", err);
+      showGate();
+      pendingTokenResolvers.forEach((p) => p.reject(err));
+      pendingTokenResolvers = [];
+      accessToken = null;
+      tokenExpiresAt = 0;
+      return;
+    }
+
     hideGate();
     document.dispatchEvent(new CustomEvent("gdrive:signedin"));
     pendingTokenResolvers.forEach((p) => p.resolve(accessToken));
@@ -83,6 +107,63 @@
       } catch (e) {
         reject(e);
       }
+    });
+  }
+
+  async function checkFileAccess(token) {
+    const url = `https://www.googleapis.com/drive/v3/files/${FILE_ID}?fields=id`;
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "omit",
+    });
+    return resp.ok;
+  }
+
+  function loadPicker() {
+    return new Promise((resolve, reject) => {
+      if (pickerLoaded) return resolve();
+      if (!window.gapi) {
+        return reject(new Error("gapi no cargado — falta <script src='https://apis.google.com/js/api.js'>"));
+      }
+      window.gapi.load("picker", {
+        callback: () => { pickerLoaded = true; resolve(); },
+        onerror: () => reject(new Error("No se pudo cargar Google Picker")),
+      });
+    });
+  }
+
+  async function showPickerForAuth(token) {
+    await loadPicker();
+    return new Promise((resolve, reject) => {
+      const view = new google.picker.DocsView()
+        .setIncludeFolders(false)
+        .setMimeTypes(MIME_XLSX)
+        .setMode(google.picker.DocsViewMode.LIST);
+
+      const picker = new google.picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(token)
+        .setDeveloperKey(API_KEY)
+        .setAppId(APP_ID)
+        .setTitle("Selecciona el archivo del Panel de Control")
+        .setLocale("es")
+        .setCallback((data) => {
+          if (data.action === google.picker.Action.PICKED) {
+            const picked = data.docs && data.docs[0];
+            if (picked && picked.id === FILE_ID) {
+              resolve();
+            } else {
+              reject(new Error(
+                `El archivo seleccionado no es el correcto. ` +
+                `Por favor, selecciona PANEL_CONTROL_DATA.xlsx`
+              ));
+            }
+          } else if (data.action === google.picker.Action.CANCEL) {
+            reject(new Error("Selección de archivo cancelada"));
+          }
+        })
+        .build();
+      picker.setVisible(true);
     });
   }
 
