@@ -65,6 +65,7 @@ const EXCEL_COLUMN_ALIASES = {
   endDate: ["FIN VIG", "FIN VIG.", "FIN VIGENCIA", "FIN", "FECHA FIN", "END", "END DATE"],
   genre: ["GÉNERO", "GENERO", "GÉNERO/PROGRAMA", "GENRE"],
   id: ["ID", "CÓDIGO", "CODIGO", "IDENTIFICADOR"],
+  actualizado: ["ACTUALIZADO", "UPDATED"],
 };
 
 let rowId = 0;
@@ -77,6 +78,7 @@ function newRow() {
     id: "",
     blockType: "",
     listo: false,
+    actualizado: false,
     title: "",
     genre: "",
     startDateText: "",
@@ -1517,6 +1519,12 @@ function importRowsFromExcelMatrix(matrix) {
         return;
       }
 
+      if (columnKey === "actualizado") {
+        const normalized = `${normalizedValue ?? ""}`.trim().toLowerCase();
+        importedRow.actualizado = ["true", "1", "x", "si", "sí", "actualizado"].includes(normalized);
+        return;
+      }
+
       const parsedValue = parseCellValue(columnKey, normalizedValue);
       importedRow[columnKey] = parsedValue;
     });
@@ -1710,10 +1718,11 @@ async function buildExcelEdicionBuffer() {
       { width: 12 },  // FIN VIG
       { width: 18 },  // GENERO
       { width: 14 },  // ID
+      { width: 12 },  // ACTUALIZADO
     ];
 
     // — Fila de cabecera principal (azul, negrita, blanco) —
-    const headerRow = ws.addRow(["LISTO", "TITULO", "INICIO VIG", "FIN VIG", "GENERO", "ID"]);
+    const headerRow = ws.addRow(["LISTO", "TITULO", "INICIO VIG", "FIN VIG", "GENERO", "ID", "ACTUALIZADO"]);
     headerRow.eachCell((cell) => applyHeaderStyle(cell, COLOR_BLUE_HDR));
     headerRow.commit();
 
@@ -1725,10 +1734,10 @@ async function buildExcelEdicionBuffer() {
       const bgArgb      = isRedSep ? COLOR_RED_SEP : toArgb(block.headerColor);
       const textArgb    = COLOR_WHITE;
 
-      // Cabecera de bloque (celda A fusionada A:F)
-      const blockHeaderRow = ws.addRow([blockLabel, null, null, null, null, null]);
+      // Cabecera de bloque (celda A fusionada A:G)
+      const blockHeaderRow = ws.addRow([blockLabel, null, null, null, null, null, null]);
       const rowNum = blockHeaderRow.number;
-      ws.mergeCells(`A${rowNum}:F${rowNum}`);
+      ws.mergeCells(`A${rowNum}:G${rowNum}`);
       applyHeaderStyle(blockHeaderRow.getCell(1), bgArgb, textArgb);
       blockHeaderRow.commit();
 
@@ -1747,6 +1756,7 @@ async function buildExcelEdicionBuffer() {
           row.endDateText   || null,
           row.genre       ? row.genre.toUpperCase() : null,
           row.id          || null,
+          !!row.actualizado,
         ]);
         // Forzar texto en columnas de fecha
         dataRow.getCell(3).numFmt = "@";
@@ -4059,6 +4069,8 @@ function ensureContextMenuElement() {
     <button type="button" class="context-menu__item" data-action="duplicate-below" role="menuitem">Duplicar filas debajo</button>
     <div class="context-menu__divider" role="separator"></div>
     <button type="button" class="context-menu__item" data-action="delete" role="menuitem">Eliminar filas</button>
+    <div class="context-menu__divider" role="separator"></div>
+    <button type="button" class="context-menu__item" data-action="actualizado" role="menuitem">Marcar Actualizado</button>
   `;
 
   menuElement.addEventListener("click", (event) => {
@@ -4120,6 +4132,12 @@ function ensureContextMenuElement() {
       }
       openDeleteConfirmModal(deleteTarget);
       closeContextMenu();
+      return;
+    }
+
+    if (target.dataset.action === "actualizado") {
+      toggleRowActualizado(blockIndex, rowIndex);
+      closeContextMenu();
     }
   });
 
@@ -4133,13 +4151,30 @@ function updateContextMenuDeleteState() {
   }
 
   const deleteItem = menuElement.querySelector('[data-action="delete"]');
-  if (!deleteItem) {
-    return;
+  if (deleteItem) {
+    const enabled = canDeleteRows(contextMenu.blockIndex, contextMenu.rowIndex);
+    deleteItem.disabled = !enabled;
+    deleteItem.classList.toggle("is-disabled", !enabled);
   }
 
-  const enabled = canDeleteRows(contextMenu.blockIndex, contextMenu.rowIndex);
-  deleteItem.disabled = !enabled;
-  deleteItem.classList.toggle("is-disabled", !enabled);
+  const actualizadoItem = menuElement.querySelector('[data-action="actualizado"]');
+  if (actualizadoItem) {
+    const row = blocks[contextMenu.blockIndex]?.rows?.[contextMenu.rowIndex];
+    const enabled = !!row && !row._autoPlaceholder;
+    actualizadoItem.disabled = !enabled;
+    actualizadoItem.classList.toggle("is-disabled", !enabled);
+    actualizadoItem.textContent = row?.actualizado ? "Desmarcar Actualizado" : "Marcar Actualizado";
+  }
+}
+
+function toggleRowActualizado(blockIndex, rowIndex) {
+  const block = blocks[blockIndex];
+  const row = block?.rows?.[rowIndex];
+  if (!row || row._autoPlaceholder) {
+    return;
+  }
+  row.actualizado = !row.actualizado;
+  renderRows();
 }
 
 function handleOutsidePointer(event) {
@@ -4849,7 +4884,12 @@ if (searchQuery && !blockHasMatchForSearch(block, searchQuery)) {
       if (IS_VIEWER_MODE && row._autoPlaceholder) { return; }
       const leftRow = createLeftRow();
       const dayRow = createDayRow();
-      
+
+      if (row.actualizado) {
+        leftRow.classList.add("is-actualizado");
+        dayRow.classList.add("is-actualizado");
+      }
+
       attachListoCheckbox(leftRow.children[1], row);
       attachTitleCell(leftRow.children[2], row);
 

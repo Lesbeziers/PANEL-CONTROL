@@ -508,6 +508,13 @@ body {
   font-weight: 600;
 }
 
+.left-row.is-actualizado > div,
+.left-row.is-actualizado > div input,
+.left-row.is-actualizado > div select,
+.left-row.is-actualizado > div textarea {
+  color: #d40000;
+}
+
 .left-row.group > div,
 .day-row.group .day-cell {
   background: var(--group-bg);
