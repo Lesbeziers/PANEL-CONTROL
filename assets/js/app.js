@@ -215,6 +215,18 @@ let blocks = [
   createBlock({ id: "block-19", blockType: "Loop", headerColor: "#e8cd8e", maxSimultaneous: 1 }),
   createBlock({ id: "block-20", blockType: "Pre Roll", headerColor: "#8fb596", maxSimultaneous: 5 }),
   createBlock({ id: "block-21", blockType: "Pre Roll", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
+  createSeparatorBlock({ id: "separator-3", label: "FREEMIUM" }),
+  createBlock({ id: "block-22", blockType: "Otras Duraciones", headerColor: "#aa87c6", maxSimultaneous: null }),
+  createBlock({ id: "block-23", blockType: "Bumper", headerColor: "#c7a8e5", maxSimultaneous: null }),
+  createBlock({ id: "block-24", blockType: "Pasos a Publi", headerColor: "#aa87c6", maxSimultaneous: null }),
+  createBlock({ id: "block-25", blockType: "Intruso", headerColor: "#c7a8e5", maxSimultaneous: null }),
+  createBlock({ id: "block-26", blockType: "Pre Roll", headerColor: "#aa87c6", maxSimultaneous: null }),
+  createSeparatorBlock({ id: "separator-4", label: "UPSELL" }),
+  createBlock({ id: "block-27", blockType: "Promo 20", headerColor: "#aa87c6", maxSimultaneous: null }),
+  createBlock({ id: "block-28", blockType: "Bumper", headerColor: "#c7a8e5", maxSimultaneous: null }),
+  createBlock({ id: "block-29", blockType: "Pasos a Publi", headerColor: "#aa87c6", maxSimultaneous: null }),
+  createBlock({ id: "block-30", blockType: "Intruso", headerColor: "#c7a8e5", maxSimultaneous: null }),
+  createBlock({ id: "block-31", blockType: "Loop", headerColor: "#aa87c6", maxSimultaneous: null }),
 ];
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
@@ -1668,6 +1680,8 @@ async function buildExcelEdicionBuffer() {
   const HEADER_COLOR_MAP = {
     "#8fb596": "FF70AD47", // verde
     "#e8cd8e": "FFFFC000", // amarillo
+    "#aa87c6": "FFAA87C6", // púrpura oscuro
+    "#c7a8e5": "FFC7A8E5", // púrpura claro
   };
   const COLOR_RED_SEP   = "FFC00000";
   const COLOR_BLUE_HDR  = "FF4472C4";
@@ -1730,7 +1744,7 @@ async function buildExcelEdicionBuffer() {
     blocks.forEach((block) => {
       const blockLabel  = block.blockType.toUpperCase();
       const isSep       = block.isSeparator;
-      const isRedSep    = isSep && (blockLabel === "OTROS CANALES" || blockLabel === "VOD");
+      const isRedSep    = isSep && (blockLabel === "OTROS CANALES" || blockLabel === "VOD" || blockLabel === "FREEMIUM" || blockLabel === "UPSELL");
       const bgArgb      = isRedSep ? COLOR_RED_SEP : toArgb(block.headerColor);
       const textArgb    = COLOR_WHITE;
 
