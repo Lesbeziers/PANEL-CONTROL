@@ -1981,14 +1981,43 @@ function parseISODateValue(value) {
   return new Date(year, month - 1, day);
 }
 
+// Día 1 del mes de origen de la fila (inicio implícito cuando no hay fecha de inicio).
+function getRowHomeMonthStart(row) {
+  const homeMonth = Number.isInteger(row?.homeMonth) ? row.homeMonth : currentCalendarContext.month;
+  const homeYear = Number.isInteger(row?.homeYear) ? row.homeYear : currentCalendarContext.year;
+  return new Date(homeYear, homeMonth - 1, 1);
+}
+
+// True si la fila tiene fecha de fin pero NO fecha de inicio: el inicio se
+// interpreta implícitamente como el día 1 de su mes de origen y la entrada se
+// propaga a los meses siguientes hasta la fecha de fin.
+function rowHasImplicitStart(row) {
+  if (!row) {
+    return false;
+  }
+  if (parseISODateValue(row.startDateISO)) {
+    return false;
+  }
+  return !!parseISODateValue(row.endDateISO);
+}
+
 function getRowRange(row) {
   if (!row) {
     return null;
   }
 
-  const startDate = parseISODateValue(row.startDateISO);
+  let startDate = parseISODateValue(row.startDateISO);
   const endDate = parseISODateValue(row.endDateISO);
-  if (!startDate || !endDate || endDate < startDate) {
+  if (!endDate) {
+    return null;
+  }
+
+  // Sin fecha de inicio pero con fecha de fin → inicio implícito = día 1 del mes de origen.
+  if (!startDate) {
+    startDate = getRowHomeMonthStart(row);
+  }
+
+  if (endDate < startDate) {
     return null;
   }
 
@@ -4926,6 +4955,16 @@ if (searchQuery && !blockHasMatchForSearch(block, searchQuery)) {
       leftRow.children[3].dataset.rowIndex = String(sourceIndex);
       leftRow.children[3].dataset.rowId = row.rowKey;
       leftRow.children[3].dataset.columnKey = "startDate";
+
+      // Inicio implícito (sin fecha de inicio + con fecha de fin): el gantt usa
+      // este día 1 del mes de origen como ancla para propagar y dibujar la barra.
+      if (rowHasImplicitStart(row)) {
+        const homeStart = getRowHomeMonthStart(row);
+        leftRow.dataset.implicitStart =
+          `${homeStart.getFullYear()}-${String(homeStart.getMonth() + 1).padStart(2, "0")}-01`;
+      } else {
+        delete leftRow.dataset.implicitStart;
+      }
       if (isSelectedCellState(row, "startDate")) {
         selectedCell = leftRow.children[3];
         selectedCell.classList.add("is-selected");

@@ -7,6 +7,12 @@
   const RANGE_MARKER_CLASS = "ganttBarRangeMarker";
   const RANGE_MARKER_START_CLASS = "ganttBarRangeMarkerStart";
   const RANGE_MARKER_END_CLASS = "ganttBarRangeMarkerEnd";
+  const NOSTART_LABEL_CLASS = "ganttBarNoStartLabel";
+  const NOSTART_LABEL_HOST_CLASS = "ganttBarNoStartHost";
+  const NOSTART_LABEL_TEXT = "SIN INICIO";
+  // Nº mínimo de días visibles para mostrar el texto dentro de la barra; por
+  // debajo de este ancho la etiqueta se oculta y queda solo en el tooltip.
+  const NOSTART_LABEL_MIN_DAYS = 4;
   const DAY_ATTR = "data-day";
   const OBSERVER_TARGET_SELECTOR = ".month-block #right-body";
   const DATE_COLUMN_SELECTOR = '.left-row > div[data-column-key="startDate"], .left-row > div[data-column-key="endDate"]';
@@ -334,6 +340,31 @@
     };
   }
   
+  // Lee el ancla de inicio implícito (día 1 del mes de origen) que app.js estampa
+  // en la fila como data-implicit-start="YYYY-MM-DD". Devuelve un Date o null.
+  function parseImplicitStart(leftRow) {
+    const raw = leftRow?.dataset?.implicitStart;
+    if (!raw) {
+      return null;
+    }
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    if (!match) {
+      return null;
+    }
+    const year = Number.parseInt(match[1], 10);
+    const month = Number.parseInt(match[2], 10);
+    const day = Number.parseInt(match[3], 10);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+      return null;
+    }
+    return new Date(year, month - 1, day);
+  }
+
+  function rowHasImplicitStart(leftRow) {
+    const startText = leftRow?.querySelector('[data-column-key="startDate"]')?.textContent?.trim() || "";
+    return !startText && !!parseImplicitStart(leftRow);
+  }
+
   function getDateRangeForRow(leftRow, calendarContext) {
     if (!leftRow) {
       return null;
@@ -343,14 +374,30 @@
     const endText = leftRow.querySelector('[data-column-key="endDate"]')?.textContent?.trim() || "";
     const start = parseDateValue(startText, calendarContext);
     const end = parseDateValue(endText, calendarContext);
-    if (!start || !end) {
+    if (!end) {
       return null;
     }
 
-    const startDate = start.date;
+    // Sin fecha de inicio pero con fecha de fin: usar el inicio implícito (día 1
+    // del mes de origen) que app.js estampa en la fila como data-implicit-start.
+    let startDate;
+    if (start) {
+      startDate = start.date;
+    } else {
+      const implicit = parseImplicitStart(leftRow);
+      if (!implicit) {
+        return null;
+      }
+      startDate = implicit;
+    }
+
     let endDate = end.date;
 
-    if (endDate < startDate && !end.hasExplicitYear && end.month < start.month) {
+    // Cruce de año: si el fin cae en un mes anterior al de inicio y no trae año
+    // explícito, se entiende que es del año siguiente. Vale para inicio real e
+    // implícito (mes derivado de startDate).
+    const startMonth = startDate.getMonth() + 1;
+    if (endDate < startDate && !end.hasExplicitYear && end.month < startMonth) {
       endDate = new Date(endDate.getFullYear() + 1, endDate.getMonth(), endDate.getDate());
     }
 
@@ -444,7 +491,37 @@
       cell.classList.remove(RANGE_START_FLAT_CLASS);
       cell.classList.remove(RANGE_END_FLAT_CLASS);
       cell.querySelectorAll(`.${RANGE_MARKER_CLASS}`).forEach((marker) => marker.remove());
+      cell.querySelectorAll(`.${NOSTART_LABEL_CLASS}`).forEach((label) => label.remove());
+      cell.classList.remove(NOSTART_LABEL_HOST_CLASS);
+      if (cell.title === NOSTART_LABEL_TEXT) {
+        cell.removeAttribute("title");
+      }
     });
+  }
+
+  // Etiqueta "SIN INICIO" centrada sobre la barra. Se añade a la primera celda
+  // del rango y se estira sobre todas las celdas visibles (overflow visible).
+  // Si la barra es demasiado estrecha, no se dibuja el texto y queda en el title.
+  function applyNoStartLabel(rangeCells) {
+    if (!rangeCells.length) {
+      return;
+    }
+    const firstCell = rangeCells[0];
+    if (rangeCells.length < NOSTART_LABEL_MIN_DAYS) {
+      // Demasiado estrecha: solo tooltip.
+      firstCell.title = NOSTART_LABEL_TEXT;
+      return;
+    }
+    const label = document.createElement("span");
+    label.className = NOSTART_LABEL_CLASS;
+    label.textContent = NOSTART_LABEL_TEXT;
+    label.setAttribute("aria-hidden", "true");
+    // Cada celda = 1 día con el mismo ancho → estirar sobre el rango visible.
+    label.style.width = `calc(100% * ${rangeCells.length})`;
+    // La celda anfitriona se eleva por encima de las celdas hermanas para que el
+    // texto, que se desborda sobre ellas, no quede tapado por sus barras.
+    firstCell.classList.add(NOSTART_LABEL_HOST_CLASS);
+    firstCell.appendChild(label);
   }
 
   function appendRangeMarker(cell, markerClass) {
@@ -705,6 +782,11 @@
       rangeCells[rangeCells.length - 1].classList.add(RANGE_END_FLAT_CLASS);
       appendRangeMarker(rangeCells[rangeCells.length - 1], RANGE_MARKER_END_CLASS);
     }
+
+    // Entrada sin fecha de inicio: rótulo "SIN INICIO" dentro de la barra.
+    if (rowHasImplicitStart(leftRow)) {
+      applyNoStartLabel(rangeCells);
+    }
   }
 
   function updateHeaderDayCountCell(cell, count) {
@@ -847,6 +929,11 @@
       cell.classList.remove(BLOCK_OVER_MAX_CLASS);
       cell.removeAttribute(DAY_ATTR);
       cell.querySelectorAll(`.${RANGE_MARKER_CLASS}`).forEach((marker) => marker.remove());
+      cell.querySelectorAll(`.${NOSTART_LABEL_CLASS}`).forEach((label) => label.remove());
+      cell.classList.remove(NOSTART_LABEL_HOST_CLASS);
+      if (cell.title === NOSTART_LABEL_TEXT) {
+        cell.removeAttribute("title");
+      }
       cell.querySelector(`.${BLOCK_DAY_COUNT_CLASS}`)?.remove();
     });
 

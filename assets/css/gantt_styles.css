@@ -104,6 +104,37 @@
   border-left: 6px solid #ffffff;
 }
 
+/* La celda que aloja el rótulo se eleva sobre las celdas hermanas para que el
+   texto desbordado no quede tapado por las barras de los días siguientes. */
+#right-body .day-row .day-cell.ganttBarCell.ganttBarNoStartHost {
+  z-index: 4;
+}
+
+/* Rótulo "SIN INICIO" centrado dentro de la barra (entradas sin fecha de inicio).
+   Se estira sobre las celdas visibles del rango y deja margen arriba/abajo. */
+#right-body .day-row .day-cell.ganttBarCell .ganttBarNoStartLabel {
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  padding: 2px 6px;
+  box-sizing: border-box;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  line-height: 1;
+  color: #2b2b2b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+}
+
 #right-body .day-row.group .day-cell {
   position: relative;
 }
