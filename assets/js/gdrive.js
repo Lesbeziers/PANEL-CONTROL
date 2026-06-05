@@ -21,6 +21,56 @@
   let pickerLoaded = false;
   let refreshTimer = null;
 
+  // Persistencia del token durante la sesión del navegador (sessionStorage): así
+  // recargar la página NO vuelve a pedir login mientras la pestaña siga viva.
+  // sessionStorage se borra al cerrar la pestaña y el token caduca igualmente.
+  const TOKEN_STORAGE_KEY = `gdriveToken:${FILE_ID}`;
+
+  function hasSessionStorage() {
+    try {
+      return typeof window !== "undefined" && !!window.sessionStorage;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function persistToken() {
+    if (!hasSessionStorage() || !accessToken) return;
+    try {
+      window.sessionStorage.setItem(
+        TOKEN_STORAGE_KEY,
+        JSON.stringify({ accessToken, tokenExpiresAt })
+      );
+    } catch (_) { /* ignore */ }
+  }
+
+  function clearPersistedToken() {
+    if (!hasSessionStorage()) return;
+    try {
+      window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch (_) { /* ignore */ }
+  }
+
+  function restoreToken() {
+    if (!hasSessionStorage()) return false;
+    try {
+      const raw = window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.accessToken || !(Date.now() < Number(parsed.tokenExpiresAt))) {
+        clearPersistedToken();
+        return false;
+      }
+      accessToken = parsed.accessToken;
+      tokenExpiresAt = Number(parsed.tokenExpiresAt);
+      // Reprogramar el refresco según el tiempo restante (con margen de 60 s).
+      scheduleTokenRefresh(Math.max((tokenExpiresAt - Date.now()) / 1000 + 60, 60));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // Refresca el token EN SILENCIO un par de minutos antes de que caduque, para
   // que el usuario no se tope con un re-login a media sesión al guardar (que es
   // donde se arriesgaba a perder trabajo). prompt:"" no muestra UI si la sesión
@@ -74,6 +124,7 @@
     accessToken = resp.access_token;
     tokenExpiresAt = Date.now() + (Number(resp.expires_in) - 60) * 1000;
     scheduleTokenRefresh(resp.expires_in);
+    persistToken();
 
     // drive.file: comprobar que el archivo del panel está autorizado.
     // Si no lo está (primer login con esta cuenta), mostrar Picker para que
@@ -125,6 +176,7 @@
     }
     accessToken = null;
     tokenExpiresAt = 0;
+    clearPersistedToken();
     showGate();
   }
 
@@ -225,12 +277,22 @@
 
   async function loadXlsxBuffer({ useAuth = false } = {}) {
     if (useAuth) {
-      const token = await ensureToken();
+      let token = await ensureToken();
       const url = `https://www.googleapis.com/drive/v3/files/${FILE_ID}?alt=media`;
-      const resp = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+      const doFetch = (t) => fetch(url, {
+        headers: { Authorization: `Bearer ${t}` },
         credentials: "omit",
       });
+      let resp = await doFetch(token);
+      // Si el token restaurado de sesión estuviera caducado/revocado (401),
+      // forzar re-login interactivo y reintentar una vez.
+      if (resp.status === 401) {
+        accessToken = null;
+        tokenExpiresAt = 0;
+        clearPersistedToken();
+        token = await ensureToken();
+        resp = await doFetch(token);
+      }
       if (!resp.ok) throw new Error(`Drive fetch failed: HTTP ${resp.status}`);
       return await resp.arrayBuffer();
     }
@@ -246,6 +308,7 @@
     if (resp.status === 401) {
       accessToken = null;
       tokenExpiresAt = 0;
+      clearPersistedToken();
       token = await ensureToken();
       resp = await uploadOnce(buffer, token);
     }
@@ -337,5 +400,9 @@
     if (retriesLeft <= 0) return;
     setTimeout(() => tryAutoInit(retriesLeft - 1), 100);
   }
+
+  // Recuperar el token de la sesión del navegador ANTES de que app.js consulte
+  // isSignedIn() en su arranque: si sigue vigente, no se vuelve a pedir login.
+  restoreToken();
   tryAutoInit();
 })();
