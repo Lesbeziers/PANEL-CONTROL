@@ -19,6 +19,28 @@
   let tokenExpiresAt = 0;
   let pendingTokenResolvers = [];
   let pickerLoaded = false;
+  let refreshTimer = null;
+
+  // Refresca el token EN SILENCIO un par de minutos antes de que caduque, para
+  // que el usuario no se tope con un re-login a media sesión al guardar (que es
+  // donde se arriesgaba a perder trabajo). prompt:"" no muestra UI si la sesión
+  // de Google sigue activa.
+  function scheduleTokenRefresh(expiresInSec) {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+    const leadSec = 120;
+    const delayMs = Math.max(Number(expiresInSec) - leadSec, 30) * 1000;
+    refreshTimer = setTimeout(() => {
+      if (!tokenClient) return;
+      try {
+        tokenClient.requestAccessToken({ prompt: "" });
+      } catch (e) {
+        console.warn("[gdrive] refresco silencioso de token falló:", e);
+      }
+    }, delayMs);
+  }
 
   window.GoogleDrive = {
     init,
@@ -51,6 +73,7 @@
     }
     accessToken = resp.access_token;
     tokenExpiresAt = Date.now() + (Number(resp.expires_in) - 60) * 1000;
+    scheduleTokenRefresh(resp.expires_in);
 
     // drive.file: comprobar que el archivo del panel está autorizado.
     // Si no lo está (primer login con esta cuenta), mostrar Picker para que
@@ -93,6 +116,10 @@
   }
 
   function signOut() {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
     if (accessToken && window.google?.accounts?.oauth2?.revoke) {
       window.google.accounts.oauth2.revoke(accessToken, () => {});
     }

@@ -58,6 +58,94 @@ const ENABLE_EXCEL_IMPORT = window.PANEL_FEATURES?.excelImportV2 !== false;
 const IS_VIEWER_MODE = window.PANEL_FEATURES?.viewerMode === true;
 const EXCEL_BLOCK_HEADER_CANDIDATES = ["BLOQUE", "TIPO BLOQUE", "TIPO", "FORMATO"];
 
+// ── Red de seguridad contra pérdida de datos ─────────────────────────────────
+// El token de Google caduca a la hora; si el guardado en Drive se interrumpe al
+// re-loguear, el trabajo en memoria podría perderse. Para evitarlo:
+//  1) Autoguardamos el estado en localStorage tras cada cambio (debounce).
+//  2) Al cargar, si hay un borrador local sin sincronizar, ofrecemos restaurarlo.
+//  3) La carga desde Drive nunca machaca cambios locales sin guardar.
+const DRAFT_STORAGE_KEY = `panelControlDraft:${window.PANEL_CONFIG?.GOOGLE_DRIVE_FILE_ID || "default"}`;
+const DRAFT_AUTOSAVE_DELAY_MS = 1500;
+let hasUnsavedChanges = false;
+let draftAutosaveTimer = null;
+let initialDriveLoadDone = false;
+
+function hasLocalStorage() {
+  try {
+    return typeof window !== "undefined" && !!window.localStorage;
+  } catch (_) {
+    return false;
+  }
+}
+
+function writeDraftNow() {
+  if (IS_VIEWER_MODE || !hasLocalStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      DRAFT_STORAGE_KEY,
+      JSON.stringify({ savedAt: Date.now(), blocks })
+    );
+  } catch (err) {
+    console.error("[draft] no se pudo autoguardar en local:", err);
+  }
+}
+
+function scheduleDraftAutosave() {
+  if (IS_VIEWER_MODE || !hasLocalStorage()) {
+    return;
+  }
+  if (draftAutosaveTimer) {
+    clearTimeout(draftAutosaveTimer);
+  }
+  draftAutosaveTimer = setTimeout(writeDraftNow, DRAFT_AUTOSAVE_DELAY_MS);
+}
+
+// Marca que hay cambios sin guardar en Drive y programa el autoguardado local.
+function markDirty() {
+  if (IS_VIEWER_MODE) {
+    return;
+  }
+  hasUnsavedChanges = true;
+  scheduleDraftAutosave();
+}
+
+function clearDraft() {
+  hasUnsavedChanges = false;
+  if (draftAutosaveTimer) {
+    clearTimeout(draftAutosaveTimer);
+    draftAutosaveTimer = null;
+  }
+  if (!hasLocalStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch (_) {
+    // ignore
+  }
+}
+
+function readDraft() {
+  if (!hasLocalStorage()) {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.blocks) || !parsed.blocks.length) {
+      return null;
+    }
+    return parsed;
+  } catch (_) {
+    return null;
+  }
+}
+
 const EXCEL_COLUMN_ALIASES = {
   listo: ["LISTO", "READY", "OK"],
   title: ["TÍTULO", "TITULO", "TITLE", "NOMBRE"],
@@ -556,6 +644,8 @@ function addPatchToCurrentAction(patch, options = {}) {
   }
 
   current.patches.push(patch);
+  // Cualquier cambio de datos editado activa la red de seguridad local.
+  markDirty();
 }
 
 function applyPatch(patch, direction) {
@@ -661,6 +751,8 @@ function runHistoryAction(action, direction) {
 
   renderRows();
   restoreHistoryFocus(action);
+  // Deshacer/rehacer también cambia los datos → autoguardado local.
+  markDirty();
 }
 
 function undoLastAction() {
@@ -1920,10 +2012,12 @@ async function saveToGoogleDrive() {
   try {
     const { buffer, sheetCount } = await buildExcelEdicionBuffer();
     await window.GoogleDrive.saveXlsxBuffer(buffer);
+    // Guardado correcto en Drive: el borrador local ya no es necesario.
+    clearDraft();
     showGridToast(`Guardado · ${sheetCount} hoja(s)`);
   } catch (err) {
     console.error("saveToGoogleDrive error:", err);
-    showGridToast("Error al guardar");
+    showGridToast("Error al guardar · tus cambios siguen a salvo en este equipo");
   }
 }
 
@@ -2487,7 +2581,8 @@ function setCellValue(cell, rawValue, historyOptions = {}) {
     if (checkbox) {
       checkbox.checked = getRowListo(row);
     }
-    // Sincronizar el checkbox del header del bloque
+    // Sincronizar el checkbox general del bloque: marcado solo si TODAS las
+    // filas visibles del mes están marcadas (al desmarcar una, se desactiva).
     const blockIndex = Number.parseInt(cell.dataset.blockIndex, 10);
     if (!Number.isNaN(blockIndex) && blocks[blockIndex]) {
       const block = blocks[blockIndex];
@@ -2496,20 +2591,11 @@ function setCellValue(cell, rawValue, historyOptions = {}) {
         .map((item) => item.row);
       const allListo = realRows.length > 0 && realRows.every((r) => getRowListo(r));
       const leftBody = document.getElementById("left-body");
-      if (leftBody) {
-        const groupRows = leftBody.querySelectorAll(".left-row--group");
-        // Los group rows incluyen separadores, hay que encontrar el correcto por blockIndex
-        let groupCount = -1;
-        for (const groupRow of groupRows) {
-          if (!groupRow.classList.contains("left-row--section-separator")) {
-            groupCount++;
-            if (groupCount === blockIndex) {
-              const blockCheckbox = groupRow.querySelector(".listo-checkbox");
-              if (blockCheckbox) { blockCheckbox.checked = allListo; }
-              break;
-            }
-          }
-        }
+      const blockCheckbox = leftBody?.querySelector(
+        `.left-row.group[data-block-index="${blockIndex}"] .listo-checkbox`
+      );
+      if (blockCheckbox) {
+        blockCheckbox.checked = allListo;
       }
     }
   } else if (DATE_COLUMNS.has(meta.columnKey)) {
@@ -5028,6 +5114,9 @@ function renderRows() {
       },
     });
     const groupDayRow = createDayRow(true);
+    // Anclaje estable para localizar el check general del bloque (el índice
+    // incluye separadores, así que no se puede deducir contando filas de grupo).
+    groupLeftRow.dataset.blockIndex = String(blockIndex);
 
     if (block.headerColor) {
       groupLeftRow.style.setProperty("--group-bg", block.headerColor);
@@ -5152,7 +5241,94 @@ leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockI
   updateGlobalCollapseButtonState();
 }
 
+function formatDraftTimestamp(ms) {
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) {
+    return "";
+  }
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Si quedó trabajo local sin sincronizar de la última sesión, ofrecer restaurarlo.
+function maybeOfferDraftRecovery() {
+  if (IS_VIEWER_MODE) {
+    return;
+  }
+  const draft = readDraft();
+  if (!draft) {
+    return;
+  }
+  showDraftRecoveryBanner(draft);
+}
+
+function showDraftRecoveryBanner(draft) {
+  document.getElementById("draft-recovery-banner")?.remove();
+
+  const banner = document.createElement("div");
+  banner.id = "draft-recovery-banner";
+  banner.setAttribute("role", "alert");
+  banner.style.cssText = [
+    "position:fixed", "left:50%", "top:16px", "transform:translateX(-50%)",
+    "z-index:10000", "max-width:560px", "width:calc(100% - 32px)",
+    "background:#fff7ed", "border:1px solid #f59e0b", "border-radius:10px",
+    "box-shadow:0 8px 30px rgba(0,0,0,0.25)", "padding:14px 16px",
+    "font-family:system-ui,-apple-system,sans-serif", "color:#7c2d12",
+    "display:flex", "align-items:center", "gap:12px", "flex-wrap:wrap",
+  ].join(";");
+
+  const text = document.createElement("div");
+  text.style.cssText = "flex:1;min-width:220px;font-size:14px;line-height:1.4";
+  const when = formatDraftTimestamp(draft.savedAt);
+  text.innerHTML =
+    `<strong>Cambios sin guardar de tu última sesión</strong><br>` +
+    `Se detectó trabajo local${when ? ` (${when})` : ""} que no llegó a guardarse en Drive. ` +
+    `¿Quieres restaurarlo?`;
+
+  const restoreBtn = document.createElement("button");
+  restoreBtn.type = "button";
+  restoreBtn.textContent = "Restaurar";
+  restoreBtn.style.cssText =
+    "background:#ea580c;color:#fff;border:0;padding:8px 16px;border-radius:6px;" +
+    "font-size:14px;font-weight:600;cursor:pointer";
+
+  const discardBtn = document.createElement("button");
+  discardBtn.type = "button";
+  discardBtn.textContent = "Descartar";
+  discardBtn.style.cssText =
+    "background:transparent;color:#7c2d12;border:1px solid #d6b08c;padding:8px 16px;" +
+    "border-radius:6px;font-size:14px;font-weight:600;cursor:pointer";
+
+  restoreBtn.addEventListener("click", () => {
+    try {
+      blocks = draft.blocks;
+      renderRows();
+      // Sigue habiendo cambios sin sincronizar con Drive: mantener el borrador.
+      hasUnsavedChanges = true;
+      scheduleDraftAutosave();
+      showGridToast("Trabajo restaurado · recuerda Guardar en Drive");
+    } catch (err) {
+      console.error("[draft] error al restaurar:", err);
+      showGridToast("No se pudo restaurar el borrador");
+    }
+    banner.remove();
+  });
+
+  discardBtn.addEventListener("click", () => {
+    clearDraft();
+    banner.remove();
+  });
+
+  banner.append(text, restoreBtn, discardBtn);
+  document.body.appendChild(banner);
+}
+
 async function autoLoadFromDrive() {
+  // Nunca sobrescribir cambios locales sin guardar con la versión de Drive.
+  if (initialDriveLoadDone && hasUnsavedChanges) {
+    console.warn("[autoLoad] omitido: hay cambios sin guardar en memoria");
+    return;
+  }
   if (!window.XLSX) {
     showGridToast("No se pudo cargar la librería de Excel");
     return;
@@ -5202,6 +5378,11 @@ async function autoLoadFromDrive() {
 
     currentCalendarContext = savedContext;
     applyCalendarContextToView(document);
+
+    initialDriveLoadDone = true;
+    // La versión de Drive es ahora el estado de referencia; cualquier borrador
+    // local representa trabajo posterior sin sincronizar → ofrecer recuperarlo.
+    maybeOfferDraftRecovery();
 
   } catch (err) {
     showGridToast("No se pudo cargar el Excel");
