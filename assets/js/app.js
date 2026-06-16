@@ -2130,6 +2130,8 @@ async function exportExcelAplicativo() {
       values[1]  = row.startDateText || null;
       values[2]  = row.endDateText   || null;
       values[3]  = tipo;
+      values[19] = "OK";        // material
+      values[23] = "no lleva";  // calificacion
       values[28] = row.genre         || null;
 
       const dataRow = ws.addRow(values);
