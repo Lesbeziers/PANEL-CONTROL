@@ -391,46 +391,50 @@ function updateGlobalCollapseButtonState() {
   button.setAttribute("aria-label", allCollapsed ? "Desplegar todos los bloques" : "Plegar todos los bloques");
 }
 
-let blocks = [
-  createBlock({ id: "block-1", blockType: "Promo 20", headerColor: "#8fb596", maxSimultaneous: 5 }),
-  createBlock({ id: "block-2", blockType: "Promo 20", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
-  createBlock({ id: "block-3", blockType: "Promo 40", headerColor: "#8fb596", maxSimultaneous: 5 }),
-  createBlock({ id: "block-4", blockType: "Promo 40", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
-  createBlock({ id: "block-5", blockType: "Otras Duraciones", headerColor: "#8fb596", maxSimultaneous: 5 }),
-  createBlock({ id: "block-6", blockType: "Otras duraciones", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
-  createBlock({ id: "block-7", blockType: "Combo", headerColor: "#8fb596", maxSimultaneous: 1 }),
-  createBlock({ id: "block-8", blockType: "Bumper", headerColor: "#8fb596", maxSimultaneous: 8 }),
-  createBlock({ id: "block-9", blockType: "Bumper", headerColor: "#e8cd8e", maxSimultaneous: 8 }),
-  createBlock({ id: "block-10", blockType: "ID", headerColor: "#8fb596", maxSimultaneous: 1 }),
-  createBlock({ id: "block-11", blockType: "Pasos a Publi", headerColor: "#8fb596", maxSimultaneous: 5 }),
-  createBlock({ id: "block-12", blockType: "pasos a Publi", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
-  createBlock({ id: "block-13", blockType: "Intruso", headerColor: "#8fb596", maxSimultaneous: 10 }),
-  createBlock({ id: "block-14", blockType: "Loop protección Pop-Ups", headerColor: "#8fb596", maxSimultaneous: null }),
-  createSeparatorBlock({ id: "separator-1", label: "OTROS CANALES" }),
-  createBlock({ id: "block-15", blockType: "Canales LaLiga", headerColor: "#e8cd8e", maxSimultaneous: null }),
-  createBlock({ id: "block-16", blockType: "Canales Golf", headerColor: "#e8cd8e", maxSimultaneous: null }),
-  createBlock({ id: "block-17", blockType: "Canales Caza y Pesca", headerColor: "#e8cd8e", maxSimultaneous: null }),
-  createSeparatorBlock({ id: "separator-2", label: "VOD" }),
-  createBlock({ id: "block-18", blockType: "Arranque", headerColor: "#8fb596", maxSimultaneous: 1 }),
-  createBlock({ id: "block-19", blockType: "Loop", headerColor: "#e8cd8e", maxSimultaneous: 1 }),
-  createBlock({ id: "block-20", blockType: "Pre Roll", headerColor: "#8fb596", maxSimultaneous: 5 }),
-  createBlock({ id: "block-21", blockType: "Pre Roll", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
-  createSeparatorBlock({ id: "separator-3", label: "FREEMIUM" }),
-  createBlock({ id: "block-22", blockType: "Otras Duraciones", headerColor: "#aa87c6", maxSimultaneous: null }),
-  createBlock({ id: "block-23", blockType: "Bumper", headerColor: "#c7a8e5", maxSimultaneous: null }),
-  createBlock({ id: "block-24", blockType: "Pasos a Publi", headerColor: "#aa87c6", maxSimultaneous: null }),
-  createBlock({ id: "block-25", blockType: "Intruso", headerColor: "#c7a8e5", maxSimultaneous: null }),
-  createBlock({ id: "block-26", blockType: "Pre Roll", headerColor: "#aa87c6", maxSimultaneous: null }),
-  createSeparatorBlock({ id: "separator-4", label: "UPSELL" }),
-  createBlock({ id: "block-27", blockType: "Promo 20", headerColor: "#aa87c6", maxSimultaneous: null }),
-  createBlock({ id: "block-32", blockType: "Promo 40", headerColor: "#c7a8e5", maxSimultaneous: null }),
-  createBlock({ id: "block-33", blockType: "Otras Duraciones", headerColor: "#aa87c6", maxSimultaneous: null }),
-  createBlock({ id: "block-28", blockType: "Bumper", headerColor: "#c7a8e5", maxSimultaneous: null }),
-  createBlock({ id: "block-29", blockType: "Pasos a Publi", headerColor: "#aa87c6", maxSimultaneous: null }),
-  createBlock({ id: "block-30", blockType: "Intruso", headerColor: "#c7a8e5", maxSimultaneous: null }),
-  createBlock({ id: "block-34", blockType: "Pre Roll", headerColor: "#aa87c6", maxSimultaneous: null }),
-  createBlock({ id: "block-31", blockType: "Loop", headerColor: "#c7a8e5", maxSimultaneous: null }),
-];
+function createDefaultBlocks() {
+  return [
+    createBlock({ id: "block-1", blockType: "Promo 20", headerColor: "#8fb596", maxSimultaneous: 5 }),
+    createBlock({ id: "block-2", blockType: "Promo 20", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
+    createBlock({ id: "block-3", blockType: "Promo 40", headerColor: "#8fb596", maxSimultaneous: 5 }),
+    createBlock({ id: "block-4", blockType: "Promo 40", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
+    createBlock({ id: "block-5", blockType: "Otras Duraciones", headerColor: "#8fb596", maxSimultaneous: 5 }),
+    createBlock({ id: "block-6", blockType: "Otras duraciones", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
+    createBlock({ id: "block-7", blockType: "Combo", headerColor: "#8fb596", maxSimultaneous: 1 }),
+    createBlock({ id: "block-8", blockType: "Bumper", headerColor: "#8fb596", maxSimultaneous: 8 }),
+    createBlock({ id: "block-9", blockType: "Bumper", headerColor: "#e8cd8e", maxSimultaneous: 8 }),
+    createBlock({ id: "block-10", blockType: "ID", headerColor: "#8fb596", maxSimultaneous: 1 }),
+    createBlock({ id: "block-11", blockType: "Pasos a Publi", headerColor: "#8fb596", maxSimultaneous: 5 }),
+    createBlock({ id: "block-12", blockType: "pasos a Publi", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
+    createBlock({ id: "block-13", blockType: "Intruso", headerColor: "#8fb596", maxSimultaneous: 10 }),
+    createBlock({ id: "block-14", blockType: "Loop protección Pop-Ups", headerColor: "#8fb596", maxSimultaneous: null }),
+    createSeparatorBlock({ id: "separator-1", label: "OTROS CANALES" }),
+    createBlock({ id: "block-15", blockType: "Canales LaLiga", headerColor: "#e8cd8e", maxSimultaneous: null }),
+    createBlock({ id: "block-16", blockType: "Canales Golf", headerColor: "#e8cd8e", maxSimultaneous: null }),
+    createBlock({ id: "block-17", blockType: "Canales Caza y Pesca", headerColor: "#e8cd8e", maxSimultaneous: null }),
+    createSeparatorBlock({ id: "separator-2", label: "VOD" }),
+    createBlock({ id: "block-18", blockType: "Arranque", headerColor: "#8fb596", maxSimultaneous: 1 }),
+    createBlock({ id: "block-19", blockType: "Loop", headerColor: "#e8cd8e", maxSimultaneous: 1 }),
+    createBlock({ id: "block-20", blockType: "Pre Roll", headerColor: "#8fb596", maxSimultaneous: 5 }),
+    createBlock({ id: "block-21", blockType: "Pre Roll", headerColor: "#e8cd8e", maxSimultaneous: 5 }),
+    createSeparatorBlock({ id: "separator-3", label: "FREEMIUM" }),
+    createBlock({ id: "block-22", blockType: "Otras Duraciones", headerColor: "#aa87c6", maxSimultaneous: null }),
+    createBlock({ id: "block-23", blockType: "Bumper", headerColor: "#c7a8e5", maxSimultaneous: null }),
+    createBlock({ id: "block-24", blockType: "Pasos a Publi", headerColor: "#aa87c6", maxSimultaneous: null }),
+    createBlock({ id: "block-25", blockType: "Intruso", headerColor: "#c7a8e5", maxSimultaneous: null }),
+    createBlock({ id: "block-26", blockType: "Pre Roll", headerColor: "#aa87c6", maxSimultaneous: null }),
+    createSeparatorBlock({ id: "separator-4", label: "UPSELL" }),
+    createBlock({ id: "block-27", blockType: "Promo 20", headerColor: "#aa87c6", maxSimultaneous: null }),
+    createBlock({ id: "block-32", blockType: "Promo 40", headerColor: "#c7a8e5", maxSimultaneous: null }),
+    createBlock({ id: "block-33", blockType: "Otras Duraciones", headerColor: "#aa87c6", maxSimultaneous: null }),
+    createBlock({ id: "block-28", blockType: "Bumper", headerColor: "#c7a8e5", maxSimultaneous: null }),
+    createBlock({ id: "block-29", blockType: "Pasos a Publi", headerColor: "#aa87c6", maxSimultaneous: null }),
+    createBlock({ id: "block-30", blockType: "Intruso", headerColor: "#c7a8e5", maxSimultaneous: null }),
+    createBlock({ id: "block-34", blockType: "Pre Roll", headerColor: "#aa87c6", maxSimultaneous: null }),
+    createBlock({ id: "block-31", blockType: "Loop", headerColor: "#c7a8e5", maxSimultaneous: null }),
+  ];
+}
+
+let blocks = createDefaultBlocks();
 let contextMenu = { open: false, x: 0, y: 0, blockIndex: -1, rowIndex: -1 };
 let menuElement = null;
 let selectedCell = null;
@@ -1670,15 +1674,16 @@ function isExcelTemplateBlockHeader(rowValues, mapping) {
   return !hasDataInMainColumns;
 }
 
-function importRowsFromExcelMatrix(matrix) {
+function importRowsFromExcelMatrix(matrix, options = {}) {
+  const { silent = false } = options;
   if (!Array.isArray(matrix) || matrix.length < 2) {
-    showGridToast("El archivo no contiene datos para importar");
+    if (!silent) showGridToast("El archivo no contiene datos para importar");
     return;
   }
 
   const { headerRowIndex, headerRow } = findExcelHeaderRow(matrix);
   if (headerRowIndex < 0) {
-    showGridToast("Faltan columnas obligatorias: TÍTULO, INICIO VIG o FIN VIG");
+    if (!silent) showGridToast("Faltan columnas obligatorias: TÍTULO, INICIO VIG o FIN VIG");
     return;
   }
 
@@ -1689,7 +1694,7 @@ function importRowsFromExcelMatrix(matrix) {
   const hasTitleColumn = Number.isInteger(mapping.title);
   const hasAtLeastOneDateColumn = Number.isInteger(mapping.startDate) || Number.isInteger(mapping.endDate);
   if (!hasTitleColumn || !hasAtLeastOneDateColumn) {
-    showGridToast("Faltan columnas obligatorias: TÍTULO, INICIO VIG o FIN VIG");
+    if (!silent) showGridToast("Faltan columnas obligatorias: TÍTULO, INICIO VIG o FIN VIG");
     return;
   }
 
@@ -1791,16 +1796,18 @@ function importRowsFromExcelMatrix(matrix) {
     importedCount += 1;
   });
 
-  renderRows();
+  if (!silent) renderRows();
 
-  const summary = [`${importedCount} fila(s) importada(s)`];
-  if (invalidCount) {
-    summary.push(`${invalidCount} descartada(s) por fecha no válida`);
+  if (!silent) {
+    const summary = [`${importedCount} fila(s) importada(s)`];
+    if (invalidCount) {
+      summary.push(`${invalidCount} descartada(s) por fecha no válida`);
+    }
+    if (skippedCount) {
+      summary.push(`${skippedCount} vacía(s) o sin bloque destino`);
+    }
+    showGridToast(summary.join(" · "));
   }
-  if (skippedCount) {
-    summary.push(`${skippedCount} vacía(s) o sin bloque destino`);
-  }
-  showGridToast(summary.join(" · "));
 }
 
 function resolveContextFromSheetName(sheetName) {
@@ -1908,7 +1915,7 @@ function attachExcelImportControls(root) {
   });
 }
 
-async function buildExcelEdicionBuffer() {
+async function buildExcelEdicionBuffer(srcBlocks = blocks) {
   if (!window.ExcelJS) {
     throw new Error("ExcelJS no cargado");
   }
@@ -1936,7 +1943,7 @@ async function buildExcelEdicionBuffer() {
 
   // Recopilar meses con datos
   const monthsMap = new Map();
-  blocks.forEach((block) => {
+  srcBlocks.forEach((block) => {
     if (block.isSeparator) return;
     block.rows.forEach((row) => {
       if (isPlaceholderRow(row)) return;
@@ -1981,7 +1988,7 @@ async function buildExcelEdicionBuffer() {
     headerRow.commit();
 
     // — Bloques —
-    blocks.forEach((block) => {
+    srcBlocks.forEach((block) => {
       const blockLabel  = block.blockType.toUpperCase();
       const isSep       = block.isSeparator;
       const isRedSep    = isSep && (blockLabel === "OTROS CANALES" || blockLabel === "VOD" || blockLabel === "FREEMIUM" || blockLabel === "UPSELL");
@@ -2027,6 +2034,211 @@ async function buildExcelEdicionBuffer() {
   return { buffer, sheetCount: sortedMonths.length };
 }
 
+// =============================================================================
+// MERGE-ON-SAVE
+//
+// Snapshot of the data at the moment of the last successful Drive load /
+// save. Used to compute the local delta when the user pulls the Guardar
+// button so that concurrent edits from other sessions are preserved.
+//
+// null while no baseline exists (cold boot before first Drive load) — in
+// that case saveToGoogleDrive falls back to a plain overwrite.
+// =============================================================================
+let loadedSnapshot = null;
+
+// Row fields that participate in the per-cell diff. listoByMonth is handled
+// separately because it is an object map and needs structural comparison.
+const DIFFABLE_ROW_FIELDS = ["title", "genre", "id", "startDateText", "endDateText", "actualizado"];
+const DIFFABLE_DATE_FIELDS = new Set(["startDateText", "endDateText"]);
+const DIFFABLE_FIELD_DEFAULTS = {
+  title: "",
+  genre: "",
+  id: "",
+  startDateText: "",
+  endDateText: "",
+  actualizado: false,
+};
+
+function normalizeDiffableField(row, field) {
+  const v = row?.[field];
+  if (v === undefined || v === null) {
+    return DIFFABLE_FIELD_DEFAULTS[field];
+  }
+  return v;
+}
+
+function deepCloneBlocks(srcBlocks) {
+  return JSON.parse(JSON.stringify(srcBlocks));
+}
+
+// Parse an XLSX buffer into a NEW blocks structure, without touching the live
+// `blocks` array or the live UI. Reuses the existing import code by swapping
+// the global state around the parse call.
+function parseBufferToBlocks(buffer) {
+  if (!window.XLSX) {
+    throw new Error("XLSX no cargado");
+  }
+  const workbook = window.XLSX.read(buffer, { type: "array", cellDates: false });
+  const sheetsWithData = workbook.SheetNames.filter((name) => workbook.Sheets[name]);
+  if (!sheetsWithData.length) {
+    return createDefaultBlocks();
+  }
+
+  const liveBlocks = blocks;
+  const liveContext = { ...currentCalendarContext };
+
+  blocks = createDefaultBlocks();
+  let parsedBlocks;
+
+  try {
+    sheetsWithData.forEach((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
+      const matrix = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
+      const sheetContext = resolveContextFromSheetName(sheetName);
+      if (sheetContext) {
+        currentCalendarContext = sheetContext;
+      }
+      importRowsFromExcelMatrix(matrix, { silent: true });
+    });
+    parsedBlocks = blocks;
+  } finally {
+    blocks = liveBlocks;
+    currentCalendarContext = liveContext;
+  }
+
+  return parsedBlocks;
+}
+
+// Build a map rowKey → { row, blockId } for every non-placeholder row in
+// `srcBlocks`. Skips rows without a rowKey (defensive — shouldn't happen with
+// session-prefixed identifiers in place).
+function indexRowsByKey(srcBlocks) {
+  const map = new Map();
+  srcBlocks.forEach((block) => {
+    if (!block?.rows) return;
+    block.rows.forEach((row) => {
+      if (!row || row._autoPlaceholder) return;
+      if (!row.rowKey) return;
+      map.set(row.rowKey, { row, blockId: block.id });
+    });
+  });
+  return map;
+}
+
+// Compute the difference between `snapshot` (what the user pulled from Drive)
+// and `current` (what they have on screen). Returns three buckets:
+//   cellChanges    — per-cell edits to existing rows
+//   newRows        — rows the user created locally
+//   deletedRowKeys — rows the user deleted locally
+function computeRowDelta(snapshot, current) {
+  const snapshotByKey = indexRowsByKey(snapshot);
+  const currentByKey = indexRowsByKey(current);
+
+  const cellChanges = [];
+  const newRows = [];
+  const deletedRowKeys = [];
+
+  for (const rowKey of snapshotByKey.keys()) {
+    if (!currentByKey.has(rowKey)) {
+      deletedRowKeys.push(rowKey);
+    }
+  }
+
+  for (const [rowKey, currEntry] of currentByKey) {
+    const snapEntry = snapshotByKey.get(rowKey);
+    if (!snapEntry) {
+      newRows.push({
+        rowSnapshot: JSON.parse(JSON.stringify(currEntry.row)),
+        blockId: currEntry.blockId,
+      });
+      continue;
+    }
+
+    const snapRow = snapEntry.row;
+    const currRow = currEntry.row;
+
+    DIFFABLE_ROW_FIELDS.forEach((field) => {
+      const before = normalizeDiffableField(snapRow, field);
+      const after = normalizeDiffableField(currRow, field);
+      if (before !== after) {
+        cellChanges.push({ rowKey, field, value: after });
+      }
+    });
+
+    // listoByMonth is an object; compare via its canonical serialization.
+    const snapListo = encodeListoByMonth(snapRow.listoByMonth || {});
+    const currListo = encodeListoByMonth(currRow.listoByMonth || {});
+    if (snapListo !== currListo) {
+      cellChanges.push({
+        rowKey,
+        field: "listoByMonth",
+        value: JSON.parse(JSON.stringify(currRow.listoByMonth || {})),
+      });
+    }
+  }
+
+  return { cellChanges, newRows, deletedRowKeys };
+}
+
+// Apply a previously computed delta to `targetBlocks` (typically the freshly
+// fetched remote state). Local edits win on conflicts (Política A): if both
+// you and another session edited the same cell, yours overrides on save.
+function applyRowDelta(targetBlocks, delta) {
+  const { cellChanges, newRows, deletedRowKeys } = delta;
+
+  // 1. Deletes first so subsequent index lookups are accurate.
+  if (deletedRowKeys.length) {
+    const deleteSet = new Set(deletedRowKeys);
+    targetBlocks.forEach((block) => {
+      if (!block?.rows) return;
+      block.rows = block.rows.filter((row) => !row || !deleteSet.has(row.rowKey));
+    });
+  }
+
+  // 2. Cell changes — find row by rowKey and overwrite the field.
+  const targetByKey = indexRowsByKey(targetBlocks);
+  cellChanges.forEach(({ rowKey, field, value }) => {
+    const entry = targetByKey.get(rowKey);
+    if (!entry) {
+      // Row was deleted remotely; we cannot apply changes to it.
+      return;
+    }
+    const row = entry.row;
+    if (DIFFABLE_DATE_FIELDS.has(field)) {
+      const dateKey = field === "startDateText" ? "startDate" : "endDate";
+      applyDateCellValue(row, dateKey, value);
+    } else if (field === "listoByMonth") {
+      row.listoByMonth = { ...(value || {}) };
+    } else {
+      row[field] = value;
+    }
+  });
+
+  // 3. New rows — append to the matching block (by stable id).
+  newRows.forEach(({ rowSnapshot, blockId }) => {
+    const targetBlock = targetBlocks.find((b) => b && b.id === blockId && !b.isSeparator);
+    if (!targetBlock || !Array.isArray(targetBlock.rows)) return;
+    if (targetBlock.rows.every((r) => r && r._autoPlaceholder)) {
+      targetBlock.rows.length = 0;
+    }
+    targetBlock.rows.push(rowSnapshot);
+  });
+}
+
+// `collapsed` is a per-user UI flag not persisted in Excel. Preserve it from
+// the live blocks onto the freshly-parsed remote structure before adopting it.
+function preserveBlockCollapsedState(targetBlocks, sourceBlocks) {
+  const collapsedById = new Map();
+  sourceBlocks.forEach((b) => {
+    if (b?.id) collapsedById.set(b.id, !!b.collapsed);
+  });
+  targetBlocks.forEach((b) => {
+    if (b?.id && collapsedById.has(b.id)) {
+      b.collapsed = collapsedById.get(b.id);
+    }
+  });
+}
+
 async function saveToGoogleDrive() {
   if (!window.GoogleDrive) {
     showGridToast("Servicio no disponible");
@@ -2034,10 +2246,33 @@ async function saveToGoogleDrive() {
   }
   showGridToast("Guardando...");
   try {
-    const { buffer, sheetCount } = await buildExcelEdicionBuffer();
+    // Fast-path: never loaded from Drive in this session → no merge possible,
+    // just overwrite. Happens only on the first save after a draft restore
+    // before Drive has been polled.
+    if (!loadedSnapshot) {
+      const { buffer, sheetCount } = await buildExcelEdicionBuffer();
+      await window.GoogleDrive.saveXlsxBuffer(buffer);
+      loadedSnapshot = deepCloneBlocks(blocks);
+      clearDraft();
+      showGridToast(`Guardado · ${sheetCount} hoja(s)`);
+      return;
+    }
+
+    // Merge path: compute local diff vs. snapshot, pull latest from Drive,
+    // replay diff on top, upload merged result, adopt as new state.
+    const localDelta = computeRowDelta(loadedSnapshot, blocks);
+    const remoteBuffer = await window.GoogleDrive.loadXlsxBuffer({ useAuth: true });
+    const remoteBlocks = parseBufferToBlocks(remoteBuffer);
+    applyRowDelta(remoteBlocks, localDelta);
+    preserveBlockCollapsedState(remoteBlocks, blocks);
+
+    const { buffer, sheetCount } = await buildExcelEdicionBuffer(remoteBlocks);
     await window.GoogleDrive.saveXlsxBuffer(buffer);
-    // Guardado correcto en Drive: el borrador local ya no es necesario.
+
+    blocks = remoteBlocks;
+    loadedSnapshot = deepCloneBlocks(blocks);
     clearDraft();
+    renderRows();
     showGridToast(`Guardado · ${sheetCount} hoja(s)`);
   } catch (err) {
     console.error("saveToGoogleDrive error:", err);
@@ -5406,6 +5641,9 @@ async function autoLoadFromDrive() {
     applyCalendarContextToView(document);
 
     initialDriveLoadDone = true;
+    // Snapshot the freshly loaded state — this is the baseline against which
+    // local edits will be diffed on the next save (merge-on-save).
+    loadedSnapshot = deepCloneBlocks(blocks);
     // La versión de Drive es ahora el estado de referencia; cualquier borrador
     // local representa trabajo posterior sin sincronizar → ofrecer recuperarlo.
     maybeOfferDraftRecovery();
