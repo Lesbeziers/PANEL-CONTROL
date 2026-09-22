@@ -61,6 +61,7 @@
   };
   
   let observer = null;
+  let observerTarget = null;
   let rafId = null;
   let activeFocusRow = null;
   let activeFocusBlockRows = [];
@@ -225,7 +226,7 @@
   }
 
   function repaintAll(root) {
-    markCalendarCells(root);
+    runFullMark(root);
   }
 
   async function repaintUntilStable(root, { maxMs = 600 } = {}) {
@@ -919,6 +920,15 @@
     });
 
     const allDayCells = root.querySelectorAll("#right-body .day-row .day-cell");
+    // OPTIMIZACION DE RENDIMIENTO (no cambia el resultado, solo el coste):
+    // antes se hacia un querySelectorAll POR CADA celda para borrar marcadores,
+    // etiquetas y contadores -> sobre miles de celdas eso disparaba el coste de
+    // 'remove'/'querySelectorAll' que veiamos en el profiler. Ahora se borran
+    // TODOS en 3 pasadas a nivel de root (mismo conjunto de elementos, mucho
+    // mas barato).
+    root.querySelectorAll(`#right-body .day-row .day-cell .${RANGE_MARKER_CLASS}`).forEach((marker) => marker.remove());
+    root.querySelectorAll(`#right-body .day-row .day-cell .${NOSTART_LABEL_CLASS}`).forEach((label) => label.remove());
+    root.querySelectorAll(`#right-body .day-row .day-cell .${BLOCK_DAY_COUNT_CLASS}`).forEach((count) => count.remove());
     allDayCells.forEach((cell) => {
       cell.classList.remove(RANGE_CELL_CLASS);
       cell.classList.remove(RANGE_START_CLASS);
@@ -928,13 +938,10 @@
       cell.classList.remove(WEEKEND_CELL_CLASS);
       cell.classList.remove(BLOCK_OVER_MAX_CLASS);
       cell.removeAttribute(DAY_ATTR);
-      cell.querySelectorAll(`.${RANGE_MARKER_CLASS}`).forEach((marker) => marker.remove());
-      cell.querySelectorAll(`.${NOSTART_LABEL_CLASS}`).forEach((label) => label.remove());
       cell.classList.remove(NOSTART_LABEL_HOST_CLASS);
       if (cell.title === NOSTART_LABEL_TEXT) {
         cell.removeAttribute("title");
       }
-      cell.querySelector(`.${BLOCK_DAY_COUNT_CLASS}`)?.remove();
     });
 
     calendarColumns.forEach(({ columnIndex, day }) => {
@@ -1612,6 +1619,25 @@
     return Boolean(hasListoCheckbox || hasEditableTitleCell);
   }
 
+  // Ejecuta markCalendarCells con el MutationObserver PAUSADO, para que no
+  // observe las mutaciones que la propia funcion hace en el DOM. Sin esto se
+  // formaba un bucle infinito: markCalendarCells modifica el DOM -> el observer
+  // lo detecta -> vuelve a programar markCalendarCells -> ... (un repintado
+  // completo por frame que saturaba la CPU en equipos lentos).
+  function runFullMark(root) {
+    const target = observerTarget;
+    if (observer) {
+      observer.disconnect();
+    }
+    try {
+      markCalendarCells(root);
+    } finally {
+      if (observer && target) {
+        observer.observe(target, { childList: true, subtree: true });
+      }
+    }
+  }
+
   function scheduleMark(root) {
     if (rafId !== null) {
       return;
@@ -1619,7 +1645,7 @@
 
     rafId = window.requestAnimationFrame(() => {
       rafId = null;
-      markCalendarCells(root);
+      runFullMark(root);
     });
   }
 
@@ -1628,6 +1654,8 @@
     if (!targetNode) {
       return;
     }
+
+    observerTarget = targetNode;
 
     if (observer) {
       observer.disconnect();
@@ -1657,7 +1685,7 @@
       if (pendingFullRepaint) {
         pendingRowsToRepaint.clear();
         pendingFullRepaint = false;
-        markCalendarCells(root);
+        runFullMark(root);
         return;
       }
 

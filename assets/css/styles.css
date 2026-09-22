@@ -263,9 +263,17 @@ body {
 }
 
 .export-excel-btn__arrow {
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1;
   pointer-events: none;
+}
+
+/* Botón que despliega menú: texto a la izquierda con margen claro y
+   flecha a la derecha. El botón del visor (sin flecha) mantiene su
+   alineación centrada por defecto. */
+.export-excel-btn:has(.export-excel-btn__arrow) {
+  justify-content: space-between;
+  padding: 0 12px;
 }
 
 .export-excel-menu {
@@ -1789,4 +1797,128 @@ body {
 
 .is-viewer-mode .block-toggle-checkbox:not(:checked) {
   visibility: hidden;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Fase 1.3c — flash sutil cuando una celda cambia por un edit remoto.         */
+/* Fondo amarillo suave que se desvanece en 700 ms; no interfiere con edición.  */
+/* -------------------------------------------------------------------------- */
+@keyframes cellRemoteFlash {
+  0%   { background-color: rgba(255, 220, 90, 0.55); }
+  100% { background-color: transparent; }
+}
+.cell-remote-flash {
+  animation: cellRemoteFlash 700ms ease-out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Fase 1.3d — otra sesión está editando esta celda (aviso visual, no bloqueo). */
+/* Marco rojo por dentro, tooltip nativo con el nombre del editor.              */
+/* -------------------------------------------------------------------------- */
+.cell-remote-lock {
+  box-shadow: inset 0 0 0 2px #d94848;
+  cursor: help;
+  position: relative;
+}
+.cell-remote-lock::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d94848;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Banner "no se está guardando" — aparece cuando Firestore rebota escrituras. */
+/* Oculto por defecto; JS lo hace visible añadiendo .is-visible.               */
+/* -------------------------------------------------------------------------- */
+.firestore-error-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: #d94848;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  z-index: 10000;
+}
+.firestore-error-banner.is-visible {
+  display: flex;
+}
+.firestore-error-banner__text {
+  max-width: 900px;
+}
+.firestore-error-banner__reload {
+  background: #fff;
+  color: #d94848;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.firestore-error-banner__reload:hover {
+  background: #f4f4f4;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Banner "cuota diaria agotada" — informativo (amarillo). Aparece cuando los  */
+/* listeners de lectura fallan con resource-exhausted. Menos urgente que el     */
+/* rojo: los datos ya cargados siguen ahí, solo se corta el tiempo real.       */
+/* Si ambos banners coinciden, el rojo (z 10000) va por encima del amarillo.   */
+/* -------------------------------------------------------------------------- */
+.firestore-quota-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: #e0a800;
+  color: #1c1c1c;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  z-index: 9999;
+}
+.firestore-quota-banner.is-visible {
+  display: flex;
+}
+.firestore-quota-banner__text {
+  max-width: 1000px;
+}
+.firestore-quota-banner__reload {
+  background: #1c1c1c;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.firestore-quota-banner__reload:hover {
+  background: #333;
 }

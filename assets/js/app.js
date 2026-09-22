@@ -82,6 +82,12 @@ function writeDraftNow() {
   if (IS_VIEWER_MODE || !hasLocalStorage()) {
     return;
   }
+  // Fase 1.3b: cuando Firestore es la fuente de verdad, cada edición ya se
+  // persiste remotamente. El borrador local pierde sentido y solo genera
+  // confusión (podría ofrecer restaurar un estado obsoleto). Se salta.
+  if (window.PANEL_CONFIG?.USE_FIRESTORE_AS_SOURCE) {
+    return;
+  }
   // Skip autosave while the user is mid-edit in a cell — the JSON.stringify
   // of the full blocks structure can stall the main thread for tens of ms on
   // older machines, which manifests as input lag. The autosave will re-fire
@@ -111,6 +117,10 @@ function writeDraftNow() {
 
 function scheduleDraftAutosave() {
   if (IS_VIEWER_MODE || !hasLocalStorage()) {
+    return;
+  }
+  // Fase 1.3b — misma razón que writeDraftNow.
+  if (window.PANEL_CONFIG?.USE_FIRESTORE_AS_SOURCE) {
     return;
   }
   if (draftAutosaveTimer) {
@@ -699,6 +709,8 @@ function applyPatch(patch, direction) {
     } else if (patch.columnKey === "id") {
       row.id = normalized;
     }
+    // Persistir en Firestore (Fase 1.3b) — undo/redo también persiste.
+    scheduleFirestoreRowSync(row, block.id);
     return;
   }
 
@@ -715,6 +727,22 @@ function applyPatch(patch, direction) {
       nextRows.splice(patch.atIndex, patch.rows.length);
     }
     blocks[patch.blockIndex] = { ...block, rows: nextRows };
+
+    // Persistir en Firestore (Fase 1.3b): forward = crear filas, back = soft-delete.
+    if (isFirestoreSourceActive()) {
+      (async () => {
+        if (direction === "forward") {
+          for (const r of patch.rows) {
+            await flushFirestoreRowImmediate(r, block.id);
+          }
+        } else {
+          for (const r of patch.rows) {
+            if (r?.rowKey && !r._autoPlaceholder) await flushFirestoreSoftDelete(r.rowKey);
+          }
+        }
+        await flushFirestoreOrderResync(block.id, blocks[patch.blockIndex].rows);
+      })();
+    }
     return;
   }
 
@@ -736,6 +764,22 @@ function applyPatch(patch, direction) {
       nextRows.splice(patch.atIndex, 0, ...cloneRows(patch.rows));
     }
     blocks[patch.blockIndex] = { ...block, rows: nextRows };
+
+    // Persistir en Firestore (Fase 1.3b): forward = soft-delete, back = re-crear.
+    if (isFirestoreSourceActive()) {
+      (async () => {
+        if (direction === "forward") {
+          for (const r of patch.rows) {
+            if (r?.rowKey && !r._autoPlaceholder) await flushFirestoreSoftDelete(r.rowKey);
+          }
+        } else {
+          for (const r of patch.rows) {
+            await flushFirestoreRowImmediate(r, block.id);
+          }
+        }
+        await flushFirestoreOrderResync(block.id, blocks[patch.blockIndex].rows);
+      })();
+    }
   }
 }
 
@@ -1956,115 +2000,301 @@ async function buildExcelEdicionBuffer(srcBlocks = blocks) {
     throw new Error("ExcelJS no cargado");
   }
 
-  // Mapa de colores UI → colores Excel (ARGB)
+  // -------- PALETA (colores Office resueltos del tema del XLSX original) --------
+  const COLOR_MONTH_BAND = "FFBF8F00"; // banda ocre en la fila 1 con el nombre del mes
+  const COLOR_BLUE_HDR   = "FF4472C4"; // fila de cabecera (LISTO/MES/TIPO/...)
+  const COLOR_GREEN      = "FF70AD47"; // bloque tipo verde
+  const COLOR_GOLD       = "FFFFC000"; // bloque tipo dorado
+  const COLOR_ORANGE_TXT = "FFFFC000"; // texto "N SIMULTANEAS" (naranja/dorado)
+  const COLOR_WEEKEND    = "FFADACAC"; // gris de las columnas de sábado/domingo en filas de datos
+  const COLOR_DATA_TEXT  = "FF2E75B6"; // azul oscuro (Blue Accent5 Darker 25%) de los textos en A-G
+  const COLOR_UPDATED    = "FFFF0000"; // rojo — marca "actualizado" del panel
+  const COLOR_DATE_ERROR = "FFFFC7CE"; // rosa claro — celdas INICIO/FIN cuando hay error de fecha
+  const COLOR_WHITE      = "FFFFFFFF";
+  const COLOR_BLACK      = "FF000000";
+
   const HEADER_COLOR_MAP = {
-    "#8fb596": "FF70AD47", // verde
-    "#e8cd8e": "FFFFC000", // amarillo
-    "#aa87c6": "FFAA87C6", // púrpura oscuro
-    "#c7a8e5": "FFC7A8E5", // púrpura claro
+    "#8fb596": COLOR_GREEN,
+    "#e8cd8e": COLOR_GOLD,
+    "#aa87c6": COLOR_GREEN, // sin variante morada en el original
+    "#c7a8e5": COLOR_GREEN,
   };
-  const COLOR_RED_SEP   = "FFC00000";
-  const COLOR_BLUE_HDR  = "FF4472C4";
-  const COLOR_WHITE     = "FFFFFFFF";
-  const COLOR_BLACK     = "FF000000";
+  const blockFillArgb = (block) =>
+    HEADER_COLOR_MAP[block?.headerColor?.toLowerCase?.()] || COLOR_GREEN;
 
-  function toArgb(hexColor) {
-    return HEADER_COLOR_MAP[hexColor?.toLowerCase()] || "FFD9D9D9";
-  }
+  const THIN_BORDER = {
+    top:    { style: "thin", color: { argb: COLOR_BLACK } },
+    left:   { style: "thin", color: { argb: COLOR_BLACK } },
+    right:  { style: "thin", color: { argb: COLOR_BLACK } },
+    bottom: { style: "thin", color: { argb: COLOR_BLACK } },
+  };
 
-  function applyHeaderStyle(cell, bgArgb, textArgb = COLOR_WHITE) {
-    cell.font = { bold: true, color: { argb: textArgb } };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgArgb } };
-  }
+  // Anchos de columna (calcados del original — D "TITULO" es el ancho grande).
+  const FIXED_COL_WIDTHS = [
+    8,   // A LISTO
+    9,   // B MES
+    23,  // C TIPO
+    90,  // D TITULO
+    10,  // E INICIO VIG
+    9,   // F FIN VIG
+    12,  // G ID
+  ];
+  const DAY_COL_WIDTH = 5;
+  const DAY_COL_START = FIXED_COL_WIDTHS.length + 1; // primera columna de día = H (8)
 
-  // Recopilar meses con datos
+  // -------- Meses a exportar --------
+  // A diferencia del export antiguo (que usaba solo homeMonth), aquí incluimos
+  // CUALQUIER mes tocado por el rango de vigencia de cada fila. Así una pieza
+  // que va del 25/06 al 01/07 aparece en el sheet de junio Y en el de julio,
+  // igual que en el planning manual.
   const monthsMap = new Map();
+  const addMonth = (month, year) => {
+    if (!Number.isInteger(month) || !Number.isInteger(year)) return;
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    if (!monthsMap.has(key)) monthsMap.set(key, { month, year });
+  };
   srcBlocks.forEach((block) => {
     if (block.isSeparator) return;
     block.rows.forEach((row) => {
       if (isPlaceholderRow(row)) return;
-      const key = `${row.homeYear}-${String(row.homeMonth).padStart(2, "0")}`;
-      if (!monthsMap.has(key)) {
-        monthsMap.set(key, { month: row.homeMonth, year: row.homeYear });
+      addMonth(row.homeMonth, row.homeYear);
+      const range = getRowRange(row);
+      if (range?.startDate && range?.endDate) {
+        const cursor = new Date(range.startDate.getFullYear(), range.startDate.getMonth(), 1);
+        const stop = new Date(range.endDate.getFullYear(), range.endDate.getMonth(), 1);
+        while (cursor <= stop) {
+          addMonth(cursor.getMonth() + 1, cursor.getFullYear());
+          cursor.setMonth(cursor.getMonth() + 1);
+        }
       }
     });
   });
-
   if (monthsMap.size === 0) {
     const { month, year } = currentCalendarContext;
-    monthsMap.set(`${year}-${String(month).padStart(2, "0")}`, { month, year });
+    addMonth(month, year);
   }
-
-  const sortedMonths = [...monthsMap.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, ctx]) => ctx);
+  const sortedMonths = [...monthsMap.values()]
+    .sort((a, b) => (a.year - b.year) || (a.month - b.month));
 
   const workbook = new ExcelJS.Workbook();
 
-  sortedMonths.forEach(({ month, year }) => {
+  for (const { month, year } of sortedMonths) {
     const monthName = MONTH_NAMES_ES[month - 1].toUpperCase();
-    const ws = workbook.addWorksheet(`${monthName} ${year}`);
+    const days = daysInMonth(month, year);
+    // Días de fin de semana (JS getDay: dom=0, sáb=6).
+    const weekendDays = new Set();
+    for (let d = 1; d <= days; d += 1) {
+      const dow = new Date(year, month - 1, d).getDay();
+      if (dow === 0 || dow === 6) weekendDays.add(d);
+    }
 
+    const ws = workbook.addWorksheet(`PANEL CONTROL ${monthName} ${year}`);
+
+    // Anchos de columna
     ws.columns = [
-      { width: 8  },  // LISTO
-      { width: 55 },  // TITULO
-      { width: 12 },  // INICIO VIG
-      { width: 12 },  // FIN VIG
-      { width: 18 },  // GENERO
-      { width: 14 },  // ID
-      { width: 12 },  // ACTUALIZADO
-      { width: 28 },  // ROW_KEY (stable identity used for merge-on-save)
+      ...FIXED_COL_WIDTHS.map((w) => ({ width: w })),
+      ...Array.from({ length: days }, () => ({ width: DAY_COL_WIDTH })),
     ];
-    // ROW_KEY is technical metadata, hide it from human readers.
-    ws.getColumn(8).hidden = true;
 
-    // — Fila de cabecera principal (azul, negrita, blanco) —
-    const headerRow = ws.addRow(["LISTO", "TITULO", "INICIO VIG", "FIN VIG", "GENERO", "ID", "ACTUALIZADO", "ROW_KEY"]);
-    headerRow.eachCell((cell) => applyHeaderStyle(cell, COLOR_BLUE_HDR));
-    headerRow.commit();
+    // Fila 1: banda ocre con el nombre del mes, centrada sobre las columnas
+    // de día. En el original la banda cubre TODAS las columnas de día, no
+    // solo una celda — usamos merge + fill sobre el rango entero.
+    ws.mergeCells(1, DAY_COL_START, 1, DAY_COL_START + days - 1);
+    const bigTitle = ws.getCell(1, DAY_COL_START);
+    bigTitle.value = monthName;
+    bigTitle.font = { name: "Calibri", size: 11, bold: true, color: { argb: COLOR_WHITE } };
+    bigTitle.alignment = { horizontal: "center", vertical: "center" };
+    bigTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_MONTH_BAND } };
+    ws.getRow(1).height = 20;
 
-    // — Bloques —
-    srcBlocks.forEach((block) => {
-      const blockLabel  = block.blockType.toUpperCase();
-      const isSep       = block.isSeparator;
-      const isRedSep    = isSep && (blockLabel === "OTROS CANALES" || blockLabel === "VOD" || blockLabel === "FREEMIUM" || blockLabel === "UPSELL");
-      const bgArgb      = isRedSep ? COLOR_RED_SEP : toArgb(block.headerColor);
-      const textArgb    = COLOR_WHITE;
-
-      // Cabecera de bloque (celda A fusionada A:H)
-      const blockHeaderRow = ws.addRow([blockLabel, null, null, null, null, null, null, null]);
-      const rowNum = blockHeaderRow.number;
-      ws.mergeCells(`A${rowNum}:H${rowNum}`);
-      applyHeaderStyle(blockHeaderRow.getCell(1), bgArgb, textArgb);
-      blockHeaderRow.commit();
-
-      if (isSep) return;
-
-      // Filas de datos del mes
-      const monthRows = block.rows.filter(
-        (row) => row.homeMonth === month && row.homeYear === year && !isPlaceholderRow(row)
-      );
-
-      monthRows.forEach((row) => {
-        const dataRow = ws.addRow([
-          encodeListoByMonth(row.listoByMonth) || null,
-          row.title       || null,
-          row.startDateText || null,
-          row.endDateText   || null,
-          row.genre       ? row.genre.toUpperCase() : null,
-          row.id          || null,
-          !!row.actualizado,
-          row.rowKey      || null,
-        ]);
-        // Forzar texto en columnas de fecha
-        dataRow.getCell(3).numFmt = "@";
-        dataRow.getCell(4).numFmt = "@";
-        // ROW_KEY: store as plain text, no formula/number coercion.
-        dataRow.getCell(8).numFmt = "@";
-        dataRow.commit();
-      });
+    // Fila 2: cabeceras (LISTO/MES/TIPO/TITULO/INICIO VIG/FIN VIG/ID + 1..days)
+    const fixedHeaders = ["LISTO", "MES", "TIPO", "TITULO", "INICIO VIG", "FIN VIG", "ID"];
+    fixedHeaders.forEach((label, i) => {
+      const cell = ws.getCell(2, i + 1);
+      cell.value = label;
+      cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: COLOR_WHITE } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_BLUE_HDR } };
+      cell.alignment = { horizontal: "center", vertical: "center" };
+      cell.border = THIN_BORDER;
     });
-  });
+    for (let d = 1; d <= days; d += 1) {
+      const cell = ws.getCell(2, DAY_COL_START + d - 1);
+      cell.value = d;
+      cell.font = { name: "Calibri", size: 13, bold: true };
+      cell.alignment = { horizontal: "center", vertical: "center" };
+      cell.border = THIN_BORDER;
+      // Fila 2 (cabecera de días) NO lleva gris de weekend en el original —
+      // se mantiene plana. El gris solo aparece en las filas de datos.
+    }
+    ws.getRow(2).height = 20;
+
+    // Bloques: uno por bloque del panel (aunque no tenga filas visibles ese mes).
+    const monthCtx = { month, year, daysInMonth: days };
+    let currentRow = 3;
+
+    for (const block of srcBlocks) {
+      if (block?.isSeparator) continue; // los separadores del panel no se replican
+      const blockLabel = (block.blockType || "").toUpperCase();
+      const blockFill = blockFillArgb(block);
+
+      // ------ Fila cabecera del bloque ------
+      // TITULO col D = "N SIMULTANEAS" (naranja) si el bloque tiene límite.
+      const simulLabel = Number.isInteger(block.maxSimultaneous)
+        ? `${block.maxSimultaneous} SIMULTANEAS`
+        : "";
+      const headerVals = ["", monthName, blockLabel, simulLabel, "", "", ""];
+      headerVals.forEach((v, i) => {
+        const cell = ws.getCell(currentRow, i + 1);
+        cell.value = v || null;
+        const isTitleCell = (i === 3);
+        cell.font = {
+          name: "Calibri", size: 11, bold: true,
+          color: { argb: isTitleCell ? COLOR_ORANGE_TXT : COLOR_WHITE },
+        };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: blockFill } };
+        cell.alignment = {
+          horizontal: (i === 1 ? "left" : "center"),
+          vertical: "center",
+        };
+        cell.border = THIN_BORDER;
+      });
+
+      // Rango de filas de datos que colgarán DEBAJO del header (necesario
+      // para escribir las fórmulas =SUM(...) del header). Se calcula ANTES
+      // de escribir las celdas de día porque necesitamos apuntar a esas
+      // futuras filas ya en el header.
+      const orderedRows = getOrderedRowsForMonth(block, monthCtx);
+      const visibleRows = orderedRows.filter(
+        (item) => item.isVisibleInCurrentMonth && !isPlaceholderRow(item.row)
+      );
+      const dataRowCount = Math.max(1, visibleRows.length); // fallback vacía cuenta 1
+      const firstDataRow = currentRow + 1;
+      const lastDataRow  = firstDataRow + dataRowCount - 1;
+
+      // Concurrencia por día — fórmulas =SUM(colFirstData:colLastData) para
+      // que el conteo se recalcule si el editor toca a mano las filas de
+      // datos en el xlsx. Idéntico al original. Fila cabecera va UNIFORME de
+      // su color (verde/dorado) — sin corte gris en los weekends.
+      for (let d = 1; d <= days; d += 1) {
+        const colNum = DAY_COL_START + d - 1;
+        const colLetter = ws.getColumn(colNum).letter;
+        const cell = ws.getCell(currentRow, colNum);
+        cell.value = { formula: `SUM(${colLetter}${firstDataRow}:${colLetter}${lastDataRow})` };
+        cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: COLOR_WHITE } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: blockFill } };
+        cell.alignment = { horizontal: "center", vertical: "center" };
+        cell.border = THIN_BORDER;
+      }
+      currentRow += 1;
+
+      // ------ Filas de datos: piezas visibles ese mes (spanning incluido) ------
+
+      // Si el bloque no tiene piezas este mes, dejamos una fila vacía debajo
+      // de la cabecera para respetar la estructura visual del original.
+      // La fila va totalmente en blanco — solo bordes y grises de weekend,
+      // ningún contenido (ni MES ni TIPO).
+      if (visibleRows.length === 0) {
+        for (let col = 1; col <= 7; col += 1) {
+          const cell = ws.getCell(currentRow, col);
+          cell.border = THIN_BORDER;
+        }
+        for (let d = 1; d <= days; d += 1) {
+          const cell = ws.getCell(currentRow, DAY_COL_START + d - 1);
+          cell.border = THIN_BORDER;
+          if (weekendDays.has(d)) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_WEEKEND } };
+          }
+        }
+        currentRow += 1;
+        continue;
+      }
+
+      for (const { row, rowRange } of visibleRows) {
+        // Marcador LISTO por MES: true/false para este mes concreto
+        const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+        const isListo = !!row.listoByMonth?.[monthKey];
+
+        // LISTO se representa con un check Unicode "✓" verde bold para TRUE
+        // y celda vacía para FALSE. El original usa la feature de checkbox
+        // nativo de Excel 365 (featurePropertyBag), pero ExcelJS no lo
+        // soporta — el símbolo Unicode da el mismo resultado visual y
+        // funciona en cualquier versión / Google Sheets.
+        const rowVals = [
+          isListo ? "✓" : "",
+          monthName,
+          blockLabel,
+          row.title || "",
+          row.startDateText || "",
+          row.endDateText || "",
+          row.id || "",
+        ];
+        // Si la fila está marcada como "actualizada" en el panel, el texto
+        // de B-G (cols de contenido) va en rojo. El check LISTO (col A)
+        // sigue verde — es un marcador semántico independiente.
+        const contentTextColor = row.actualizado ? COLOR_UPDATED : COLOR_DATA_TEXT;
+        rowVals.forEach((v, i) => {
+          const cell = ws.getCell(currentRow, i + 1);
+          cell.value = v;
+          if (i === 0) {
+            // Celda LISTO: check verde grande.
+            cell.font = { name: "Calibri", size: 14, bold: true, color: { argb: COLOR_GREEN } };
+          } else {
+            cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: contentTextColor } };
+          }
+          cell.alignment = {
+            horizontal: (i === 3 ? "left" : "center"),
+            vertical: "center",
+          };
+          cell.border = THIN_BORDER;
+        });
+        // Fechas siempre como texto crudo (evita que Excel intente parsear "25/6").
+        ws.getCell(currentRow, 5).numFmt = "@";
+        ws.getCell(currentRow, 6).numFmt = "@";
+
+        // Si la fila tiene error de fecha (parse malo o inicio > fin), pintamos
+        // INICIO VIG + FIN VIG en rosa/rojo claro — misma señal que da el
+        // panel con borde rojo. Ayuda a los editores a detectar el error en
+        // el propio xlsx sin tener que volver a abrir la app.
+        const hasDateError = !!row.startDateError || !!row.endDateError || !!row.dateRangeError;
+        if (hasDateError) {
+          ws.getCell(currentRow, 5).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_DATE_ERROR } };
+          ws.getCell(currentRow, 6).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_DATE_ERROR } };
+        }
+
+        // Días activos: intersección del rango de la pieza con este mes.
+        const activeDays = new Set();
+        if (rowRange?.startDate && rowRange?.endDate) {
+          const monthStart = new Date(year, month - 1, 1);
+          const monthEnd = new Date(year, month, 0);
+          const visStart = rowRange.startDate < monthStart ? monthStart : rowRange.startDate;
+          const visEnd   = rowRange.endDate   > monthEnd   ? monthEnd   : rowRange.endDate;
+          if (visEnd >= visStart) {
+            for (let d = visStart.getDate(); d <= visEnd.getDate(); d += 1) {
+              activeDays.add(d);
+            }
+          }
+        }
+        for (let d = 1; d <= days; d += 1) {
+          const cell = ws.getCell(currentRow, DAY_COL_START + d - 1);
+          if (activeDays.has(d)) cell.value = 1;
+          cell.font = { name: "Calibri", size: 11 };
+          cell.alignment = { horizontal: "center", vertical: "center" };
+          cell.border = THIN_BORDER;
+          if (weekendDays.has(d)) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_WEEKEND } };
+          }
+        }
+        currentRow += 1;
+      }
+    }
+  }
+
+  // Al abrir el libro, saltar directamente al mes que el editor está viendo.
+  // Si ese mes no tiene datos (no hay hoja creada), caemos al primero.
+  const activeIdx = Math.max(0, sortedMonths.findIndex(
+    (m) => m.month === currentCalendarContext.month && m.year === currentCalendarContext.year
+  ));
+  workbook.views = [{ activeTab: activeIdx }];
 
   const buffer = await workbook.xlsx.writeBuffer();
   return { buffer, sheetCount: sortedMonths.length };
@@ -2301,7 +2531,28 @@ const PRESENCE_STALE_MS = 60_000;
 // Slightly more lenient than presence staleness because saves take a few
 // seconds and we want the lock to hold for the full operation.
 const PRESENCE_SAVING_FLAG_MAX_AGE_S = 25;
-const EDITOR_NAME_STORAGE_KEY = `panelControlEditorName:${window.PANEL_CONFIG?.GOOGLE_DRIVE_FILE_ID || "default"}`;
+// Fase 2b — la key del alias ya no depende del ID de Drive (que va a
+// desaparecer). Ahora se ancla al email autorizado (dev vs prod tienen
+// distinto), lo que la hace estable frente al cutover. La key legacy se
+// mantiene solo para migrar transparentemente el alias almacenado antes.
+const EDITOR_NAME_STORAGE_KEY = `panelControlEditorName:${window.PANEL_CONFIG?.AUTHORIZED_EDITOR_EMAIL || window.PANEL_CONFIG?.GOOGLE_DRIVE_FILE_ID || "default"}`;
+const EDITOR_NAME_STORAGE_KEY_LEGACY = `panelControlEditorName:${window.PANEL_CONFIG?.GOOGLE_DRIVE_FILE_ID || "default"}`;
+
+// Migración transparente: si existe un alias guardado bajo la key vieja y
+// aún no hay uno bajo la nueva, lo copiamos y borramos la vieja. Efecto:
+// el usuario no ve el modal "¿Cómo te llamas?" cuando desplegamos.
+try {
+  if (typeof window.localStorage !== "undefined"
+      && EDITOR_NAME_STORAGE_KEY !== EDITOR_NAME_STORAGE_KEY_LEGACY
+      && !window.localStorage.getItem(EDITOR_NAME_STORAGE_KEY)) {
+    const legacy = window.localStorage.getItem(EDITOR_NAME_STORAGE_KEY_LEGACY);
+    if (legacy) {
+      window.localStorage.setItem(EDITOR_NAME_STORAGE_KEY, legacy);
+      window.localStorage.removeItem(EDITOR_NAME_STORAGE_KEY_LEGACY);
+      console.info("[alias] migrado desde key legacy a la key nueva anclada al email autorizado");
+    }
+  }
+} catch (_) { /* localStorage puede estar deshabilitado */ }
 const EDITOR_NAME_MAX_LENGTH = 24;
 // Short session id used as the appProperties key. Drive limits each key to
 // ~124 chars and the bag to ~30 entries, so we keep ids compact.
@@ -2757,6 +3008,14 @@ async function ensureHistoryFile() {
 }
 
 async function loadHistory() {
+  // Fase 1.3e: cuando Firestore es la fuente, el historial vive en la
+  // colección panels/main/history y se mantiene actualizado en tiempo real
+  // por el listener startFirestoreHistoryListener(). No leemos del JSON de
+  // Drive (contiene entradas antiguas que machacarían el estado bueno).
+  if (window.PANEL_CONFIG?.USE_FIRESTORE_AS_SOURCE) {
+    if (historyPanelOpen) renderHistoryPanelContents();
+    return;
+  }
   if (historyLoading) return;
   historyLoading = true;
   try {
@@ -3118,8 +3377,21 @@ function flashRowInCurrentView(rowKey) {
   const leftBody = document.getElementById("left-body");
   const rightBody = document.getElementById("right-body");
   if (!leftBody || !rightBody) return false;
-  const target = leftBody.querySelector(`[data-row-id="${CSS.escape(rowKey)}"]`);
-  if (!target) return false;
+
+  let target = leftBody.querySelector(`[data-row-id="${CSS.escape(rowKey)}"]`);
+
+  // Fila no está en DOM. ¿Existe en memoria pero su bloque está colapsado?
+  if (!target) {
+    const loc = typeof findRowLocationByKey === "function" ? findRowLocationByKey(rowKey) : null;
+    if (loc?.block?.collapsed) {
+      // Expandir el bloque, re-renderizar y reintentar.
+      blocks[loc.blockIndex] = { ...loc.block, collapsed: false };
+      renderRows();
+      target = leftBody.querySelector(`[data-row-id="${CSS.escape(rowKey)}"]`);
+    }
+    if (!target) return false;
+  }
+
   const leftRow = target.closest(".left-row");
   if (!leftRow) return false;
   leftRow.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -3459,11 +3731,83 @@ async function exportExcelAplicativo() {
   showGridToast(`Excel Aplicativo exportado · ${monthNameCap} ${year}`);
 }
 
-function attachExcelExportControls(root) {
-  const exportBtn = root.querySelector(".export-excel-btn");
-  if (exportBtn) {
-    exportBtn.addEventListener("click", () => exportExcelAplicativo());
+async function exportPanelSnapshotXlsx() {
+  if (!window.ExcelJS) {
+    showGridToast("No se pudo generar el Excel (ExcelJS no cargado)");
+    return;
   }
+  try {
+    showGridToast("Generando copia local…");
+    const { buffer, sheetCount } = await buildExcelEdicionBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `PANEL_CONTROL_${stamp}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showGridToast(`Copia descargada · ${sheetCount} hoja(s)`);
+  } catch (err) {
+    console.error("exportPanelSnapshotXlsx error:", err);
+    showGridToast("Error al generar la copia local");
+  }
+}
+
+function attachExcelExportControls(root) {
+  // Visor: un solo botón "EXPORTAR APLICATIVO" sin menú.
+  if (IS_VIEWER_MODE) {
+    root.querySelectorAll(".export-excel-btn").forEach((btn) => {
+      btn.addEventListener("click", () => exportExcelAplicativo());
+    });
+    return;
+  }
+
+  // Editor: desplegable "ACCIONES" con dos ítems.
+  const trigger = root.querySelector("#actions-menu-btn");
+  const menu = root.querySelector("#actions-menu");
+  if (!trigger || !menu) return;
+
+  const closeMenu = () => {
+    menu.classList.remove("open");
+    trigger.setAttribute("aria-expanded", "false");
+    document.removeEventListener("mousedown", handleOutside);
+    document.removeEventListener("keydown", handleEscape);
+  };
+  const openMenu = () => {
+    menu.classList.add("open");
+    trigger.setAttribute("aria-expanded", "true");
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("keydown", handleEscape);
+  };
+  const handleOutside = (event) => {
+    if (menu.contains(event.target) || trigger.contains(event.target)) return;
+    closeMenu();
+  };
+  const handleEscape = (event) => {
+    if (event.key === "Escape") { closeMenu(); trigger.focus(); }
+  };
+
+  trigger.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (menu.classList.contains("open")) closeMenu();
+    else openMenu();
+  });
+
+  menu.querySelectorAll(".export-excel-menu__item").forEach((item) => {
+    item.addEventListener("click", () => {
+      const kind = item.dataset.export;
+      closeMenu();
+      if (kind === "snapshot") exportPanelSnapshotXlsx();
+      else if (kind === "aplicativo") exportExcelAplicativo();
+    });
+  });
 
   if (IS_VIEWER_MODE) return;
 
@@ -3924,6 +4268,18 @@ function setCellValue(cell, rawValue, historyOptions = {}) {
         groupKey: historyOptions.groupKey || `${meta.blockIndex}:${meta.rowIndex}:${meta.columnKey}`,
       }
     );
+    // Persistir la edición en Firestore (Fase 1.3b) con debounce por fila.
+    // Ignora placeholders y no-op si el flag está en false.
+    const blockId = blocks[meta.blockIndex]?.id;
+    if (blockId) scheduleFirestoreRowSync(row, blockId);
+    // Registrar en historial (Fase 1.3e).
+    logMutationToHistory({
+      ...buildHistoryRowMeta(row, blocks[meta.blockIndex]),
+      kind: "cell",
+      column: meta.columnKey,
+      before: formatHistoryValue(before),
+      after: formatHistoryValue(after),
+    });
   }
 
   return { row, meta };
@@ -5290,6 +5646,8 @@ function attachDateCell(cell, row, columnKey) {
     const cleanup = () => {
       if (editingCell?.cell === cell) {
         editingCell = null;
+        releaseCellLockForEditing(cell);
+        flushPendingRemoteRender();
       }
       cell.classList.remove("is-editing");
       render();
@@ -5307,6 +5665,7 @@ function attachDateCell(cell, row, columnKey) {
 
     input.addEventListener("blur", commit, { once: true });
 
+    acquireCellLockForEditing(cell);
     editingCell = {
       cell,
       input,
@@ -5357,7 +5716,13 @@ function attachGenreCell(cell, row) {
 
     const commit = () => {
       if (!cancelled) {
-        setCellValue(cell, row.genre, { type: "edit", groupKey: `${cell.dataset.blockIndex}:${cell.dataset.rowIndex}:${cell.dataset.columnKey}` });
+        // El clic/Enter en el desplegable ya han puesto row.genre al valor
+        // elegido. Restauramos el valor original ANTES de setCellValue para que
+        // este detecte el cambio (before !== after) y dispare la sincronizacion
+        // a Firestore y el historial. Sin esto, before === after y no se guardaba.
+        const chosenGenre = row.genre;
+        row.genre = originalValue;
+        setCellValue(cell, chosenGenre, { type: "edit", groupKey: `${cell.dataset.blockIndex}:${cell.dataset.rowIndex}:${cell.dataset.columnKey}` });
       }
       cleanup();
     };
@@ -5405,6 +5770,8 @@ function attachGenreCell(cell, row) {
     const cleanup = () => {
       if (editingCell?.cell === cell) {
         editingCell = null;
+        releaseCellLockForEditing(cell);
+        flushPendingRemoteRender();
       }
       document.removeEventListener("mousedown", handlePointerDownOutside);
       menu.classList.remove("open");
@@ -5459,6 +5826,7 @@ function attachGenreCell(cell, row) {
     window.addEventListener("resize", positionMenu);
     document.addEventListener("mousedown", handlePointerDownOutside);
 
+    acquireCellLockForEditing(cell);
     editingCell = {
       cell,
       input: menu,
@@ -5503,6 +5871,24 @@ function insertRows(blockIndex, atIndex, count = 1, options = {}) {
     },
     { type: options.historyType || "rows", groupKey: options.groupKey || `insert:${blockIndex}:${atIndex}` }
   );
+
+  // Persistir en Firestore (Fase 1.3b): 1) crear cada fila nueva, 2)
+  // reescribir orderIndex de todo el bloque para que las filas por debajo
+  // reflejen su nueva posición.
+  if (isFirestoreSourceActive()) {
+    const blockId = block.id;
+    (async () => {
+      for (const newRow of rowsToInsert) {
+        await flushFirestoreRowImmediate(newRow, blockId);
+      }
+      await flushFirestoreOrderResync(blockId, blocks[blockIndex].rows);
+    })();
+    // Historial (Fase 1.3e).
+    rowsToInsert.forEach((r) => logMutationToHistory({
+      ...buildHistoryRowMeta(r, block),
+      kind: "add",
+    }));
+  }
 
   if (options.render !== false) {
     renderRows();
@@ -5550,6 +5936,28 @@ function deleteRowsInBlock(blockIndex, startRow, endRow, options = {}) {
     },
     { type: options.historyType || "rows", groupKey: options.groupKey || `delete:${blockIndex}:${safeStart}` }
   );
+
+  // Persistir en Firestore (Fase 1.3b): soft-delete de cada fila removida
+  // + reescritura del orderIndex del bloque para las que quedan.
+  if (isFirestoreSourceActive()) {
+    const blockId = block.id;
+    (async () => {
+      for (const removed of removedRows) {
+        if (removed?.rowKey && !removed._autoPlaceholder) {
+          await flushFirestoreSoftDelete(removed.rowKey);
+        }
+      }
+      await flushFirestoreOrderResync(blockId, blocks[blockIndex].rows);
+    })();
+    // Historial (Fase 1.3e).
+    removedRows.forEach((r) => {
+      if (!r?.rowKey || r._autoPlaceholder) return;
+      logMutationToHistory({
+        ...buildHistoryRowMeta(r, block),
+        kind: "delete",
+      });
+    });
+  }
 
   return {
     removedStart: safeStart,
@@ -5784,7 +6192,18 @@ function toggleRowActualizado(blockIndex, rowIndex) {
   if (!row || row._autoPlaceholder) {
     return;
   }
+  const before = row.actualizado;
   row.actualizado = !row.actualizado;
+  // Persistir en Firestore (Fase 1.3b)
+  scheduleFirestoreRowSync(row, block.id);
+  // Registrar en historial (Fase 1.3e).
+  logMutationToHistory({
+    ...buildHistoryRowMeta(row, block),
+    kind: "cell",
+    column: "actualizado",
+    before: before ? "sí" : "no",
+    after: row.actualizado ? "sí" : "no",
+  });
   renderRows();
 }
 
@@ -5971,6 +6390,16 @@ function attachBlockListoCheckbox(cell, block) {
         if (before !== after) {
           addPatchToCurrentAction(createSetCellPatch({ blockIndex: blocks.findIndex((candidate) => candidate.id === block.id), rowIndex, rowKey: row.rowKey, columnKey: "listo", monthKey }, before, after), { type: "toggle", groupKey: `toggle-block:${block.id}` });
           setRowListo(row, targetValue);
+          // Persistir en Firestore (Fase 1.3b) — cada fila afectada individualmente.
+          scheduleFirestoreRowSync(row, block.id);
+          // Registrar en historial (Fase 1.3e).
+          logMutationToHistory({
+            ...buildHistoryRowMeta(row, block),
+            kind: "cell",
+            column: "listo",
+            before,
+            after,
+          });
         }
       });
       renderRows();
@@ -6114,6 +6543,8 @@ function attachTitleCell(cell, row) {
     const cleanupEditingState = () => {
       if (editingCell?.cell === cell) {
         editingCell = null;
+        releaseCellLockForEditing(cell);
+        flushPendingRemoteRender();
       }
       syncFillHandlePosition();
     };
@@ -6148,6 +6579,7 @@ function attachTitleCell(cell, row) {
 
     input.addEventListener("blur", commit, { once: true });
 
+    acquireCellLockForEditing(cell);
     editingCell = {
       cell,
       input,
@@ -6201,6 +6633,8 @@ function attachIdTextCell(cell, row) {
     const cleanup = () => {
       if (editingCell?.cell === cell) {
         editingCell = null;
+        releaseCellLockForEditing(cell);
+        flushPendingRemoteRender();
       }
       renderReadMode();
       syncFillHandlePosition();
@@ -6217,6 +6651,7 @@ function attachIdTextCell(cell, row) {
 
     input.addEventListener("blur", commit, { once: true });
 
+    acquireCellLockForEditing(cell);
     editingCell = {
       cell,
       input,
@@ -6261,10 +6696,23 @@ function renderMonthBlockGrid(root) {
 
       <div class="panel-layout__toolbar" aria-label="Acciones del panel">
         <div class="panel-layout__toolbar-inner">
-          ${IS_VIEWER_MODE ? `` : `
+          ${(IS_VIEWER_MODE || window.PANEL_CONFIG?.USE_FIRESTORE_AS_SOURCE) ? `` : `
           <button type="button" class="save-drive-btn" id="save-drive-btn">GUARDAR</button>
           `}
+          ${IS_VIEWER_MODE ? `
           <button type="button" class="export-excel-btn export-excel-btn--viewer" data-export="aplicativo">EXPORTAR APLICATIVO</button>
+          ` : `
+          <div class="export-excel-wrapper">
+            <button type="button" class="export-excel-btn" id="actions-menu-btn" aria-haspopup="true" aria-expanded="false" aria-controls="actions-menu">
+              ACCIONES
+              <span class="export-excel-btn__arrow" aria-hidden="true">▾</span>
+            </button>
+            <div class="export-excel-menu" id="actions-menu" role="menu" aria-labelledby="actions-menu-btn">
+              <button type="button" class="export-excel-menu__item" role="menuitem" data-export="aplicativo">Exportar a Aplicativo</button>
+              <button type="button" class="export-excel-menu__item" role="menuitem" data-export="snapshot">Generar BackUp en Excel</button>
+            </div>
+          </div>
+          `}
           <div class="search-box-wrapper">
             <span class="search-box-icon" aria-hidden="true">⌕</span>
             <input type="text" class="search-box-input" placeholder="Buscar título..." autocomplete="off" aria-label="Buscar en el panel" />
@@ -6576,6 +7024,9 @@ leftRow.addEventListener("contextmenu", (event) => openContextMenu(event, blockI
   syncFillHandlePosition();
   syncCopyAntsPosition();
   updateGlobalCollapseButtonState();
+  // Fase 1.3d — el DOM se reconstruye entero en renderRows(); reaplicamos
+  // los overlays de locks remotos para que no desaparezcan.
+  if (typeof repaintAllRemoteLocks === "function") repaintAllRemoteLocks();
 }
 
 function formatDraftTimestamp(ms) {
@@ -6737,27 +7188,969 @@ async function autoLoadFromDrive() {
   }
 }
 
-renderMonthBlockGrid(document.getElementById("app"));
+// =============================================================================
+// FIRESTORE WRITE LAYER (Fase 1.3b)
+//
+// Cada edición dispara un write a Firestore con debounce corto por rowKey.
+// Insertar y borrar filas producen writes inmediatos (sin debounce) más una
+// resincronización batch del orderIndex del bloque. La lógica de guardado
+// vía xlsx en Drive se desactiva vía flag USE_FIRESTORE_AS_SOURCE.
+// =============================================================================
 
-if (IS_VIEWER_MODE) {
-  autoLoadFromDrive();
-} else {
-  // Editor: requiere sign-in OAuth antes de cargar datos.
-  if (window.GoogleDrive?.isSignedIn?.()) {
-    autoLoadFromDrive();
-  } else {
-    document.addEventListener("gdrive:signedin", autoLoadFromDrive, { once: true });
-    if (window.GoogleDrive?.showGate) {
-      window.GoogleDrive.showGate();
-    } else {
-      // GIS aún no disponible — esperar y reintentar
-      const waitInterval = setInterval(() => {
-        if (window.GoogleDrive?.showGate) {
-          clearInterval(waitInterval);
-          window.GoogleDrive.showGate();
-        }
-      }, 100);
-      setTimeout(() => clearInterval(waitInterval), 10000);
+const FIRESTORE_SYNC_DEBOUNCE_MS = 400;
+const firestoreSyncTimers = new Map(); // rowKey -> timeout id
+
+function isFirestoreSourceActive() {
+  return window.PANEL_CONFIG?.USE_FIRESTORE_AS_SOURCE === true
+    && !!window.PanelFirebase?.writeRowToFirestore;
+}
+
+// -----------------------------------------------------------------------------
+// Banner "no se está guardando"
+//
+// Toda escritura DATOS de Firestore (filas, borrados, reorden) pasa por
+// markFirestoreWriteOk() / markFirestoreWriteFailed(). Cuando lleva una
+// racha de fallos, aparece un banner fijo arriba avisando al usuario.
+// Se oculta solo cuando vuelve a haber una escritura exitosa.
+//
+// NO se aplica a presencia ni locks — esas escrituras fallan a menudo por
+// bloqueos de red intermitentes y no son fatales para la integridad de
+// datos, meterlos aquí ensuciaría con falsos positivos.
+// -----------------------------------------------------------------------------
+let firestoreWritesHealthy = true;
+let firestoreErrorBannerEl = null;
+
+function ensureFirestoreErrorBanner() {
+  if (firestoreErrorBannerEl && document.body.contains(firestoreErrorBannerEl)) {
+    return firestoreErrorBannerEl;
+  }
+  const el = document.createElement("div");
+  el.className = "firestore-error-banner";
+  el.innerHTML = `
+    <span class="firestore-error-banner__text">
+      ⚠ No se está guardando en la nube — tus cambios podrían perderse.
+      Cierra sesión y vuelve a firmar, o recarga la página.
+    </span>
+    <button type="button" class="firestore-error-banner__reload">Recargar página</button>
+  `;
+  el.querySelector(".firestore-error-banner__reload").addEventListener("click", () => {
+    window.location.reload();
+  });
+  document.body.appendChild(el);
+  firestoreErrorBannerEl = el;
+  return el;
+}
+
+function markFirestoreWriteFailed(err) {
+  if (firestoreWritesHealthy) {
+    firestoreWritesHealthy = false;
+    console.error("[firestore-write] escrituras rotas — mostrando banner:", err?.code || err);
+  }
+  const el = ensureFirestoreErrorBanner();
+  el.classList.add("is-visible");
+}
+
+function markFirestoreWriteOk() {
+  if (firestoreWritesHealthy) return;
+  firestoreWritesHealthy = true;
+  console.info("[firestore-write] escrituras recuperadas — ocultando banner");
+  if (firestoreErrorBannerEl) firestoreErrorBannerEl.classList.remove("is-visible");
+}
+
+// -----------------------------------------------------------------------------
+// Banner "cuota diaria agotada"
+//
+// Firestore en plan Spark tiene un tope de 50k lecturas/día. Cuando se
+// alcanza, los listeners onSnapshot fallan con el código "resource-exhausted"
+// y el panel deja de recibir cambios en tiempo real (aunque los datos ya
+// cargados siguen visibles y las escrituras siguen entrando hasta agotar su
+// propio tope). El fallo es SILENCIOSO por defecto — este banner lo hace
+// visible para que los editores sepan que no están viendo los últimos
+// cambios y coordinen por otro canal hasta el reset (medianoche Pacífico).
+//
+// Distinto del banner rojo de escritura: este es informativo (amarillo), no
+// implica pérdida inminente. Se resetea solo cada día.
+// -----------------------------------------------------------------------------
+let firestoreQuotaBannerEl = null;
+let firestoreQuotaExhausted = false;
+
+function ensureFirestoreQuotaBanner() {
+  if (firestoreQuotaBannerEl && document.body.contains(firestoreQuotaBannerEl)) {
+    return firestoreQuotaBannerEl;
+  }
+  const el = document.createElement("div");
+  el.className = "firestore-quota-banner";
+  el.innerHTML = `
+    <span class="firestore-quota-banner__text">
+      ⚠ Se ha alcanzado el límite diario de Firebase. El panel podría no mostrar
+      los últimos cambios de otros editores en tiempo real. Se restablecerá
+      automáticamente esta noche. Coordina los cambios importantes por otro canal
+      hasta entonces.
+    </span>
+    <button type="button" class="firestore-quota-banner__reload">Recargar</button>
+  `;
+  el.querySelector(".firestore-quota-banner__reload").addEventListener("click", () => {
+    window.location.reload();
+  });
+  document.body.appendChild(el);
+  firestoreQuotaBannerEl = el;
+  return el;
+}
+
+// Devuelve true si el error de Firestore es por cuota agotada.
+function isQuotaExhaustedError(err) {
+  const code = err?.code || "";
+  return code === "resource-exhausted"
+    || /resource-exhausted|quota|RESOURCE_EXHAUSTED/i.test(err?.message || "");
+}
+
+// Punto único al que llegan TODOS los onError de los listeners de lectura.
+// Si es cuota → banner amarillo. Otros errores se dejan a su console.error
+// de siempre (no queremos falsos positivos de red intermitente).
+function handleFirestoreListenerError(source, err) {
+  console.error(`[${source}] listener error:`, err?.code || err);
+  if (isQuotaExhaustedError(err)) {
+    if (!firestoreQuotaExhausted) {
+      firestoreQuotaExhausted = true;
+      console.warn("[firestore-quota] cuota diaria agotada — mostrando banner");
     }
+    ensureFirestoreQuotaBanner().classList.add("is-visible");
   }
 }
+
+function scheduleFirestoreRowSync(row, blockId) {
+  if (!isFirestoreSourceActive()) return;
+  if (!row?.rowKey || row._autoPlaceholder) return;
+  if (!blockId) return;
+
+  const key = row.rowKey;
+  const existing = firestoreSyncTimers.get(key);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(() => {
+    firestoreSyncTimers.delete(key);
+    window.PanelFirebase.writeRowToFirestore(blockId, row, { editor: editorName || "anon" })
+      .then(() => markFirestoreWriteOk())
+      .catch((err) => {
+        console.error("[firestore-sync] error:", err, "row:", row.rowKey);
+        markFirestoreWriteFailed(err);
+      });
+  }, FIRESTORE_SYNC_DEBOUNCE_MS);
+  firestoreSyncTimers.set(key, timer);
+}
+
+async function flushFirestoreRowImmediate(row, blockId, extra = {}) {
+  if (!isFirestoreSourceActive()) return false;
+  if (!row?.rowKey || row._autoPlaceholder || !blockId) return false;
+  // Cancela cualquier debounce pendiente para esta fila
+  const existing = firestoreSyncTimers.get(row.rowKey);
+  if (existing) { clearTimeout(existing); firestoreSyncTimers.delete(row.rowKey); }
+  try {
+    await window.PanelFirebase.writeRowToFirestore(blockId, row, {
+      editor: editorName || "anon",
+      ...extra,
+    });
+    markFirestoreWriteOk();
+    return true;
+  } catch (err) {
+    console.error("[firestore-sync] flush error:", err, "row:", row.rowKey);
+    markFirestoreWriteFailed(err);
+    return false;
+  }
+}
+
+async function flushFirestoreSoftDelete(rowKey) {
+  if (!isFirestoreSourceActive()) return false;
+  if (!rowKey) return false;
+  const existing = firestoreSyncTimers.get(rowKey);
+  if (existing) { clearTimeout(existing); firestoreSyncTimers.delete(rowKey); }
+  try {
+    await window.PanelFirebase.softDeleteRowInFirestore(rowKey, { editor: editorName || "anon" });
+    markFirestoreWriteOk();
+    return true;
+  } catch (err) {
+    console.error("[firestore-sync] soft-delete error:", err, "rowKey:", rowKey);
+    markFirestoreWriteFailed(err);
+    return false;
+  }
+}
+
+async function flushFirestoreOrderResync(blockId, rows) {
+  if (!isFirestoreSourceActive() || !blockId) return false;
+  try {
+    await window.PanelFirebase.syncBlockOrderIndicesToFirestore(blockId, rows, { editor: editorName || "anon" });
+    markFirestoreWriteOk();
+    return true;
+  } catch (err) {
+    console.error("[firestore-sync] order-resync error:", err, "blockId:", blockId);
+    markFirestoreWriteFailed(err);
+    return false;
+  }
+}
+
+// =============================================================================
+// FIRESTORE LOAD (Fase 1.3a)
+//
+// Sustituye la carga inicial desde Drive por una lectura de Firestore. El
+// resto del flujo (guardar, presencia, historial, export) sigue funcionando
+// con Drive por ahora — se irán migrando en fases posteriores.
+// =============================================================================
+async function loadPanelFromFirestore() {
+  if (!window.PanelFirebase?.db) {
+    console.error("[firestore-load] Firebase no está inicializado");
+    return false;
+  }
+
+  showGridToast("Cargando datos desde Firestore…");
+  blocks = createDefaultBlocks();
+
+  // FASE 2 opt: eliminamos el getDocs inicial. El listener onSnapshot que
+  // arrancamos abajo dispara su primer evento con TODAS las filas como
+  // "added" — eso mismo hace de load inicial. Antes hacíamos ambas cosas y
+  // pagábamos ~2× lecturas por sesión. Ahora solo una.
+  startFirestoreRealtimeListener();
+  startCellLocksListener();
+  startFirestoreHistoryListener();
+  return true;
+}
+
+// =============================================================================
+// FIRESTORE REALTIME LISTENER (Fase 1.3c)
+//
+// Tras el load inicial, nos suscribimos a la colección de filas. Cada cambio
+// hecho por otro editor (o por nosotros mismos rebotando desde el servidor)
+// entra por handleFirestoreRemoteChange. Aplicamos la mutación mínima al
+// estado en memoria y repintamos solo lo necesario. Ecos locales pendientes
+// de confirmar (`fromLocal:true`) se ignoran — nuestro propio setCellValue
+// ya actualizó la pantalla.
+// =============================================================================
+let firestoreRealtimeUnsub = null;
+// Si llega un cambio remoto mientras el usuario está tecleando en una celda,
+// aplicamos el cambio a memoria pero NO llamamos a renderRows() (destruiría
+// el <input> activo). Marcamos que hay un render pendiente y lo lanzamos en
+// cuanto la edición termina (ver flushPendingRemoteRender()).
+let pendingRemoteRender = false;
+let pendingRemoteFlashes = []; // [{ blockIndex, rowIndex, columnKey }]
+
+function flushPendingRemoteRender() {
+  if (!pendingRemoteRender) return;
+  pendingRemoteRender = false;
+  const flashes = pendingRemoteFlashes.slice();
+  pendingRemoteFlashes = [];
+  renderRows();
+  requestAnimationFrame(() => {
+    flashes.forEach((f) => flashCellUpdate(f.blockIndex, f.rowIndex, f.columnKey));
+  });
+}
+
+function startFirestoreRealtimeListener() {
+  if (!isFirestoreSourceActive()) return;
+  if (firestoreRealtimeUnsub) return; // Ya suscrito.
+  if (!window.PanelFirebase?.listenToPanelRows) return;
+  firestoreRealtimeUnsub = window.PanelFirebase.listenToPanelRows(
+    handleFirestoreSnapshotBatch,
+    (err) => handleFirestoreListenerError("firestore-live", err)
+  );
+}
+
+// -------- Historial en Firestore (Fase 1.3e) ----------------------------------
+let firestoreHistoryUnsub = null;
+
+function startFirestoreHistoryListener() {
+  if (!isFirestoreSourceActive() || IS_VIEWER_MODE) return;
+  if (firestoreHistoryUnsub) return;
+  if (!window.PanelFirebase?.listenToHistoryEntries) return;
+  firestoreHistoryUnsub = window.PanelFirebase.listenToHistoryEntries((entries) => {
+    historyEntries = entries;
+    historyLoaded = true;
+    if (historyPanelOpen && typeof renderHistoryPanelContents === "function") {
+      renderHistoryPanelContents();
+    }
+  }, (err) => handleFirestoreListenerError("history", err));
+}
+
+// Añade una entrada al historial en Firestore. No-op si el flag está en false.
+// Los llamadores le pasan un objeto con la forma que ya consume el panel:
+// { kind, editor, rowKey, rowTitle, blockType, monthLabel, homeMonth, homeYear,
+//   column?, before?, after? }.
+function logMutationToHistory(entry) {
+  if (!isFirestoreSourceActive() || IS_VIEWER_MODE) return;
+  if (!window.PanelFirebase?.appendHistoryEntryToFirestore) return;
+  window.PanelFirebase.appendHistoryEntryToFirestore(entry)
+    .catch((err) => console.error("[history] append error:", err));
+}
+
+// Helper: construye la parte de metadata común (editor, blockType, monthLabel,
+// etc.) a partir de una row y su blockIndex.
+//
+// El "mes de la entrada" es el mes que estás VIENDO cuando haces el cambio,
+// no el homeMonth histórico de la fila. Motivo: una fila creada en junio con
+// fechas en julio se ve en julio; al pulsar "Ir a la fila" queremos volver
+// donde estabas editando, no al mes de creación (donde ya no es visible).
+function buildHistoryRowMeta(row, block) {
+  const ctxMonth = Number.isInteger(currentCalendarContext?.month) ? currentCalendarContext.month : row?.homeMonth ?? null;
+  const ctxYear = Number.isInteger(currentCalendarContext?.year) ? currentCalendarContext.year : row?.homeYear ?? null;
+  return {
+    editor: editorName || "Anónimo",
+    rowKey: row?.rowKey || "",
+    rowTitle: row?.title || "",
+    blockType: block?.blockType || "",
+    monthLabel: (typeof formatHomeMonthLabel === "function")
+      ? formatHomeMonthLabel(ctxMonth, ctxYear) : "",
+    homeMonth: ctxMonth,
+    homeYear: ctxYear,
+  };
+}
+
+// Firestore serializa listoByMonth como ARRAY de months activos (ver comentario
+// en firebase.js). Este helper lo convierte al shape interno del panel
+// (map { monthKey: true }) sin importar cómo esté guardado en Firestore:
+//   - array (nuevo, correcto): ["2026-07"]                → { "2026-07": true }
+//   - map (legacy, migración): { "2026-07": true }        → { "2026-07": true }
+//   - null/undefined                                      → {}
+function decodeListoByMonth(raw) {
+  if (Array.isArray(raw)) {
+    const out = {};
+    raw.forEach((k) => { if (k) out[k] = true; });
+    return out;
+  }
+  if (raw && typeof raw === "object") return { ...raw };
+  return {};
+}
+
+function findRowLocationByKey(rowKey) {
+  for (let b = 0; b < blocks.length; b += 1) {
+    const block = blocks[b];
+    if (!block || block.isSeparator || !Array.isArray(block.rows)) continue;
+    for (let r = 0; r < block.rows.length; r += 1) {
+      if (block.rows[r]?.rowKey === rowKey) {
+        return { blockIndex: b, rowIndex: r, block, row: block.rows[r] };
+      }
+    }
+  }
+  return null;
+}
+
+function findBlockById(blockId) {
+  const idx = blocks.findIndex((b) => b?.id === blockId);
+  return idx === -1 ? null : { blockIndex: idx, block: blocks[idx] };
+}
+
+// Convierte un doc de Firestore al shape interno de fila del panel.
+function firestoreDocToRow(rowKey, data, blockType) {
+  return {
+    rowKey,
+    _autoPlaceholder: false,
+    id: data.id || "",
+    blockType,
+    title: data.title || "",
+    genre: data.genre || "",
+    startDateText: data.startDateText || "",
+    startDateISO: data.startDateISO || "",
+    startDateError: null,
+    endDateText: data.endDateText || "",
+    endDateISO: data.endDateISO || "",
+    endDateError: null,
+    dateRangeError: null,
+    listoByMonth: decodeListoByMonth(data.listoByMonth),
+    actualizado: !!data.actualizado,
+    homeMonth: Number.isInteger(data.homeMonth) ? data.homeMonth : DEFAULT_CALENDAR_CONTEXT.month,
+    homeYear: Number.isInteger(data.homeYear) ? data.homeYear : DEFAULT_CALENDAR_CONTEXT.year,
+  };
+}
+
+// Devuelve true si el usuario está tecleando ahora mismo en esa celda.
+// Se usa para NO pisar su edición en curso cuando llega un cambio remoto
+// del mismo campo. Los otros campos de la fila sí se actualizan.
+function isCellCurrentlyBeingEdited(rowKey, columnKey) {
+  if (!editingCell || !editingCell.cell) return false;
+  const cell = editingCell.cell;
+  if (cell.dataset.columnKey !== columnKey) return false;
+  const info = getRowByCell(cell);
+  return info?.row?.rowKey === rowKey;
+}
+
+function flashCellUpdate(blockIndex, rowIndex, columnKey) {
+  const cell = document.querySelector(
+    `[data-block-index="${blockIndex}"][data-row-index="${rowIndex}"][data-column-key="${columnKey}"]`
+  );
+  if (!cell) return;
+  cell.classList.remove("cell-remote-flash");
+  // Fuerza reflow para reiniciar la animación si ya estaba corriendo.
+  void cell.offsetWidth;
+  cell.classList.add("cell-remote-flash");
+  setTimeout(() => cell.classList.remove("cell-remote-flash"), 700);
+}
+
+// -----------------------------------------------------------------------------
+// Handler del batch entero (Fase 1.3c + optimización lecturas).
+//
+// El primer snapshot equivale al "load inicial" — trae todas las filas como
+// "added". Lo tratamos aparte: agrupamos por bloque, ordenamos por orderIndex,
+// y hacemos UN renderRows() al final en vez de N (uno por fila). Ahorra
+// tanto lecturas como pintadas.
+//
+// Los snapshots posteriores traen 1-2 cambios normalmente; se procesan cada
+// uno por separado como antes (con flash, defer si el usuario está editando,
+// etc.).
+// -----------------------------------------------------------------------------
+function handleFirestoreSnapshotBatch({ isInitial, changes }) {
+  if (isInitial) {
+    applyInitialFirestoreSnapshot(changes);
+    return;
+  }
+  changes.forEach(applyLiveRowChange);
+}
+
+function applyInitialFirestoreSnapshot(changes) {
+  const rowsByBlock = new Map();
+  changes.forEach(({ type, rowKey, data }) => {
+    // En el snapshot inicial esperamos SOLO "added". Ignoramos "removed" y
+    // docs marcados deleted:true.
+    //
+    // IMPORTANTE: NO filtramos por fromLocal aquí. Con la caché persistente
+    // activada, el primer snapshot viene desde IndexedDB local y puede
+    // marcar como "hasPendingWrites" los docs con escrituras pendientes de
+    // confirmar por el servidor (p. ej. una edición hecha justo antes de
+    // recargar). Filtrarlas HARÍA DESAPARECER esas filas del panel aunque
+    // sus datos estén perfectamente correctos en caché. El filtro fromLocal
+    // solo aplica en el flujo live (aplyLiveRowChange), donde sí queremos
+    // ignorar ecos de nuestros propios writes ya pintados en pantalla.
+    if (type === "removed") return;
+    if (!data || data.deleted === true) return;
+    const blockId = data.blockId;
+    if (!blockId) return;
+    if (!rowsByBlock.has(blockId)) rowsByBlock.set(blockId, []);
+    rowsByBlock.get(blockId).push({ rowKey, data });
+  });
+
+  let totalLoaded = 0;
+  blocks.forEach((block) => {
+    if (block.isSeparator) return;
+    const entries = rowsByBlock.get(block.id);
+    if (!entries || !entries.length) return;
+    entries.sort((a, b) => (a.data.orderIndex ?? 0) - (b.data.orderIndex ?? 0));
+    block.rows = entries.map(({ rowKey, data }) => firestoreDocToRow(rowKey, data, block.blockType));
+    totalLoaded += entries.length;
+  });
+
+  // Compatibilidad con el resto del flujo (será limpiado en Fase 2).
+  loadedSnapshot = deepCloneBlocks(blocks);
+  initialDriveLoadDone = true;
+
+  validateAllRowsDateRanges();
+  applyCalendarContextToView(document);
+  renderRows();
+
+  showGridToast(`Cargadas ${totalLoaded} filas desde Firestore`);
+  console.info(`[firestore-load] ${totalLoaded} filas cargadas (snapshot inicial, sin getDocs)`);
+}
+
+function applyLiveRowChange({ type, rowKey, data, fromLocal }) {
+  // Eco local (nuestro propio write pendiente de confirmar por el servidor).
+  // setCellValue/insertRows/... ya han pintado el cambio en pantalla — no
+  // hay nada que hacer.
+  if (fromLocal) return;
+
+  // -------- REMOVED (hard delete, poco común con nuestro modelo) --------
+  if (type === "removed") {
+    const loc = findRowLocationByKey(rowKey);
+    if (!loc) return;
+    loc.block.rows.splice(loc.rowIndex, 1);
+    if (!loc.block.rows.length) {
+      const fallback = newRowForBlock(loc.block.blockType, currentCalendarContext);
+      fallback._autoPlaceholder = true;
+      loc.block.rows.push(fallback);
+    }
+    if (editingCell) { pendingRemoteRender = true; return; }
+    renderRows();
+    return;
+  }
+
+  // Soft delete llega como "modified" con deleted:true.
+  if (data?.deleted === true) {
+    const loc = findRowLocationByKey(rowKey);
+    if (!loc) return;
+    loc.block.rows.splice(loc.rowIndex, 1);
+    if (!loc.block.rows.length) {
+      const fallback = newRowForBlock(loc.block.blockType, currentCalendarContext);
+      fallback._autoPlaceholder = true;
+      loc.block.rows.push(fallback);
+    }
+    validateAllRowsDateRanges();
+    if (editingCell) { pendingRemoteRender = true; return; }
+    renderRows();
+    return;
+  }
+
+  // -------- ADDED / MODIFIED --------
+  const existing = findRowLocationByKey(rowKey);
+
+  if (!existing) {
+    // Fila nueva creada por otro editor.
+    if (type !== "added") return;
+    const target = findBlockById(data.blockId);
+    if (!target) return;
+    const newR = firestoreDocToRow(rowKey, data, target.block.blockType);
+    const insertAt = Number.isInteger(data.orderIndex)
+      ? Math.min(target.block.rows.length, Math.max(0, data.orderIndex))
+      : target.block.rows.length;
+    // Si el bloque solo tenía un placeholder, lo quitamos primero.
+    if (target.block.rows.length === 1 && target.block.rows[0]?._autoPlaceholder) {
+      target.block.rows = [newR];
+    } else {
+      target.block.rows.splice(insertAt, 0, newR);
+    }
+    validateAllRowsDateRanges();
+    if (editingCell) { pendingRemoteRender = true; return; }
+    renderRows();
+    return;
+  }
+
+  // Fila existente modificada por otro editor.
+  const row = existing.row;
+  const changed = []; // columnKeys que realmente cambiaron para el flash
+  const remoteRow = firestoreDocToRow(rowKey, data, existing.block.blockType);
+
+  // Aplicar campo a campo, respetando la celda que el usuario esté editando
+  // ahora mismo y evitando repaints inútiles si el valor no ha cambiado.
+  // (rowField, domColumnKey) — el DOM usa startDate/endDate como data-column-key.
+  const fields = [
+    ["title", "title"],
+    ["id", "id"],
+    ["genre", "genre"],
+    ["startDateText", "startDate"],
+    ["endDateText", "endDate"],
+    ["actualizado", "actualizado"],
+  ];
+  for (const [rowField, domColumnKey] of fields) {
+    if (row[rowField] === remoteRow[rowField]) continue;
+    if (isCellCurrentlyBeingEdited(rowKey, domColumnKey)) continue;
+    row[rowField] = remoteRow[rowField];
+    changed.push(domColumnKey);
+  }
+  // Fechas: los ISO viajan aparte del texto
+  if (row.startDateISO !== remoteRow.startDateISO) row.startDateISO = remoteRow.startDateISO;
+  if (row.endDateISO !== remoteRow.endDateISO) row.endDateISO = remoteRow.endDateISO;
+
+  // listoByMonth es un objeto — comparo por JSON crudo.
+  if (JSON.stringify(row.listoByMonth) !== JSON.stringify(remoteRow.listoByMonth)) {
+    row.listoByMonth = remoteRow.listoByMonth;
+    changed.push("listo");
+  }
+
+  if (changed.length === 0) return; // Nada que hacer, era self-echo idempotente.
+
+  validateAllRowsDateRanges();
+
+  // Si el usuario está editando ahora mismo, NO tocamos el DOM (destruiría
+  // su <input>). Se aplica en cuanto termine la edición.
+  if (editingCell) {
+    pendingRemoteRender = true;
+    changed.forEach((columnKey) => {
+      pendingRemoteFlashes.push({ blockIndex: existing.blockIndex, rowIndex: existing.rowIndex, columnKey });
+    });
+    return;
+  }
+
+  renderRows();
+  requestAnimationFrame(() => {
+    changed.forEach((columnKey) => flashCellUpdate(existing.blockIndex, existing.rowIndex, columnKey));
+  });
+}
+
+// =============================================================================
+// CELL LOCKS (Fase 1.3d)
+//
+// Aviso visual: cuando un editor entra en modo edición de una celda, un doc
+// en `panels/main/locks/{lockId}` la marca como "ocupada". Otros editores
+// pintan la celda con marco rojo. Es AVISO, no bloqueo — la celda sigue
+// siendo editable. Diseño A del check plan.
+//
+// Heartbeat cada 10 s mantiene el lock vivo. Locks con updatedAt > 30 s se
+// consideran huérfanos (crash/cierre brusco) y se ignoran.
+// =============================================================================
+
+const LOCK_HEARTBEAT_MS = 10_000;
+const LOCK_TTL_MS = 30_000;
+const LOCK_SWEEP_INTERVAL_MS = 5_000;
+// Si el usuario no interactúa (teclado / ratón) durante este tiempo mientras
+// tiene una celda abierta, el heartbeat deja de reescribir y el lock cae por
+// TTL en 30 s. Evita que un editor que se olvide una pestaña abierta bloquee
+// visualmente esa celda para siempre.
+const LOCK_IDLE_TIMEOUT_MS = 3 * 60 * 1000;
+
+// Locks propios: lockId → { heartbeatTimer, rowKey, columnKey }
+const myActiveCellLocks = new Map();
+// Momento de la última actividad detectada del usuario. Se refresca en cada
+// tecla o movimiento del ratón mientras haya un lock activo.
+let lastEditingActivityMs = 0;
+let activityListenersAttached = false;
+// Locks remotos: lockId → { rowKey, columnKey, editor, sessionId, updatedAtMs }
+const remoteCellLocks = new Map();
+let cellLocksUnsub = null;
+let cellLocksSweepTimer = null;
+
+function cellLockIdOf(rowKey, columnKey) {
+  return `${rowKey}__${columnKey}`;
+}
+
+function extractLockCoordsFromCell(cell) {
+  if (!cell) return null;
+  const columnKey = cell.dataset.columnKey;
+  const info = typeof getRowByCell === "function" ? getRowByCell(cell) : null;
+  const rowKey = info?.row?.rowKey;
+  if (!rowKey || !columnKey) return null;
+  return { rowKey, columnKey };
+}
+
+function ensureLockActivityListeners() {
+  if (activityListenersAttached) return;
+  activityListenersAttached = true;
+  const bump = () => {
+    if (myActiveCellLocks.size > 0) lastEditingActivityMs = Date.now();
+  };
+  // Pasivos y en captura para no interferir con el resto de handlers.
+  document.addEventListener("keydown", bump, { capture: true, passive: true });
+  document.addEventListener("pointermove", bump, { capture: true, passive: true });
+  document.addEventListener("pointerdown", bump, { capture: true, passive: true });
+}
+
+function acquireCellLockForEditing(cell) {
+  if (!isFirestoreSourceActive()) return;
+  if (!window.PanelFirebase?.writeCellLock) return;
+  const coords = extractLockCoordsFromCell(cell);
+  if (!coords) return;
+  const lockId = cellLockIdOf(coords.rowKey, coords.columnKey);
+  if (myActiveCellLocks.has(lockId)) return; // Ya poseemos este lock.
+
+  ensureLockActivityListeners();
+  lastEditingActivityMs = Date.now();
+
+  // Registrar el lock en el mapa ANTES de la primera escritura. Así el guard
+  // interno del write() no lo salta pensando que el lock ya se ha liberado.
+  const lockState = { heartbeatTimer: null, rowKey: coords.rowKey, columnKey: coords.columnKey };
+  myActiveCellLocks.set(lockId, lockState);
+
+  const write = async () => {
+    const state = myActiveCellLocks.get(lockId);
+    if (!state) return; // Ya se liberó desde fuera.
+    // Si el usuario lleva un rato inactivo, autoreleasamos: paramos el
+    // heartbeat, borramos el doc (para no esperar los 30 s de TTL) y salimos.
+    if (Date.now() - lastEditingActivityMs > LOCK_IDLE_TIMEOUT_MS) {
+      if (state.heartbeatTimer) clearInterval(state.heartbeatTimer);
+      myActiveCellLocks.delete(lockId);
+      try {
+        await window.PanelFirebase.releaseCellLock(coords.rowKey, coords.columnKey);
+      } catch (_) { /* si falla, el TTL lo cubre en 30 s */ }
+      console.info(`[cell-lock] auto-release por inactividad: ${lockId}`);
+      return;
+    }
+    try {
+      await window.PanelFirebase.writeCellLock(coords.rowKey, coords.columnKey, {
+        editor: editorName || "anon",
+        sessionId: PRESENCE_SESSION_ID,
+      });
+    } catch (err) {
+      console.error("[cell-lock] write error:", err);
+    }
+  };
+
+  write(); // primera escritura
+  lockState.heartbeatTimer = setInterval(write, LOCK_HEARTBEAT_MS);
+}
+
+function releaseCellLockForEditing(cell) {
+  if (!window.PanelFirebase?.releaseCellLock) return;
+  const coords = extractLockCoordsFromCell(cell);
+  if (!coords) return;
+  const lockId = cellLockIdOf(coords.rowKey, coords.columnKey);
+  const state = myActiveCellLocks.get(lockId);
+  if (state) {
+    clearInterval(state.heartbeatTimer);
+    myActiveCellLocks.delete(lockId);
+  }
+  // Borrar el doc en Firestore (fire-and-forget — si falla, el TTL lo limpia).
+  window.PanelFirebase.releaseCellLock(coords.rowKey, coords.columnKey)
+    .catch((err) => console.error("[cell-lock] release error:", err));
+}
+
+function paintCellLockOverlay(rowKey, columnKey, editor) {
+  const loc = findRowLocationByKey(rowKey);
+  if (!loc) return;
+  const cell = document.querySelector(
+    `[data-block-index="${loc.blockIndex}"][data-row-index="${loc.rowIndex}"][data-column-key="${columnKey}"]`
+  );
+  if (!cell) return;
+  cell.classList.add("cell-remote-lock");
+  cell.setAttribute("title", `Editando: ${editor || "otro editor"}`);
+}
+
+function clearCellLockOverlay(rowKey, columnKey) {
+  const loc = findRowLocationByKey(rowKey);
+  if (!loc) return;
+  const cell = document.querySelector(
+    `[data-block-index="${loc.blockIndex}"][data-row-index="${loc.rowIndex}"][data-column-key="${columnKey}"]`
+  );
+  if (!cell) return;
+  cell.classList.remove("cell-remote-lock");
+  cell.removeAttribute("title");
+}
+
+function isLockFresh(lockState) {
+  if (!lockState || !Number.isFinite(lockState.updatedAtMs)) return false;
+  return (Date.now() - lockState.updatedAtMs) <= LOCK_TTL_MS;
+}
+
+function handleRemoteCellLockChange({ type, lockId, data }) {
+  if (type === "removed") {
+    const prev = remoteCellLocks.get(lockId);
+    remoteCellLocks.delete(lockId);
+    if (prev) clearCellLockOverlay(prev.rowKey, prev.columnKey);
+    return;
+  }
+  if (!data) return;
+  const { rowKey, columnKey, editor, sessionId, updatedAt } = data;
+  // Ignora locks propios (nosotros ya pintamos nuestro <input>, no queremos
+  // vernos rojos).
+  if (sessionId === PRESENCE_SESSION_ID) return;
+  const updatedAtMs = updatedAt?.toMillis?.() ?? null;
+  const state = { rowKey, columnKey, editor, sessionId, updatedAtMs };
+  remoteCellLocks.set(lockId, state);
+  if (isLockFresh(state)) {
+    paintCellLockOverlay(rowKey, columnKey, editor);
+  } else {
+    clearCellLockOverlay(rowKey, columnKey);
+  }
+}
+
+function repaintAllRemoteLocks() {
+  // Se llama al final de renderRows() — el DOM se ha reconstruido y hay que
+  // reaplicar todos los overlays a los cells vigentes.
+  remoteCellLocks.forEach((state) => {
+    if (isLockFresh(state)) {
+      paintCellLockOverlay(state.rowKey, state.columnKey, state.editor);
+    }
+  });
+}
+
+function sweepExpiredCellLocks() {
+  // Barre locks huérfanos: si el updatedAt es viejo, quitamos el marco rojo
+  // aunque el doc siga en Firestore. Cuando el heartbeat vuelva a llegar (si
+  // es que llega), se repintará automáticamente vía handleRemoteCellLockChange.
+  remoteCellLocks.forEach((state, lockId) => {
+    if (!isLockFresh(state)) {
+      clearCellLockOverlay(state.rowKey, state.columnKey);
+    }
+  });
+}
+
+// =============================================================================
+// FIRESTORE PRESENCE (Fase 2a)
+//
+// Sustituye a startPresenceTracking (Drive appProperties). Comparte los
+// constantes PRESENCE_* del sistema anterior para mantener el mismo timing.
+// El shape que se pasa a renderPresenceState es idéntico, así que la UI
+// (badge + tooltip) sigue funcionando sin tocar nada.
+// =============================================================================
+let firestorePresenceUnsub = null;
+let firestorePresenceHeartbeatTimer = null;
+let firestorePresenceSweepTimer = null;
+let firestorePresenceStarted = false;
+const remotePresenceByCsession = new Map(); // sessionId → { editor, updatedAtMs, isSaving }
+
+function isPresenceEntryFresh(entry) {
+  if (!entry || !Number.isFinite(entry.updatedAtMs)) return false;
+  return (Date.now() - entry.updatedAtMs) <= PRESENCE_STALE_MS;
+}
+
+function renderFirestorePresenceFromMap() {
+  const otherNames = [];
+  const savingNames = [];
+  remotePresenceByCsession.forEach((entry, sessionId) => {
+    if (sessionId === PRESENCE_SESSION_ID) return; // no me cuento
+    if (!isPresenceEntryFresh(entry)) return;
+    otherNames.push(entry.editor || "");
+    if (entry.isSaving) savingNames.push(entry.editor || "");
+  });
+  renderPresenceState({ otherNames, savingNames });
+}
+
+function handleRemotePresenceChange({ type, sessionId, data }) {
+  if (type === "removed") {
+    remotePresenceByCsession.delete(sessionId);
+    renderFirestorePresenceFromMap();
+    return;
+  }
+  if (!data) return;
+  const updatedAtMs = data.updatedAt?.toMillis?.() ?? Date.now();
+  remotePresenceByCsession.set(sessionId, {
+    editor: data.editor || "",
+    updatedAtMs,
+    isSaving: !!data.isSaving,
+  });
+  renderFirestorePresenceFromMap();
+}
+
+async function startFirestorePresenceTracking() {
+  if (firestorePresenceStarted || IS_VIEWER_MODE) return;
+  if (!isFirestoreSourceActive()) return;
+  if (!window.PanelFirebase?.writePresenceHeartbeat) return;
+  firestorePresenceStarted = true;
+
+  renderPresenceState({ loading: true });
+  // Aseguramos alias antes del primer heartbeat.
+  try { await ensureEditorName(); } catch (_) { /* opcional */ }
+
+  const heartbeat = () => window.PanelFirebase.writePresenceHeartbeat(PRESENCE_SESSION_ID, {
+    editor: editorName || "anon",
+    isSaving: false, // en modo Firestore no hay ciclo "guardando" — cada edit persiste al instante
+  }).catch((err) => console.error("[presence] heartbeat error:", err));
+
+  heartbeat();
+  firestorePresenceHeartbeatTimer = setInterval(heartbeat, PRESENCE_HEARTBEAT_MS);
+
+  firestorePresenceUnsub = window.PanelFirebase.listenToPresence(
+    handleRemotePresenceChange,
+    (err) => handleFirestoreListenerError("presence", err)
+  );
+
+  // Barre entradas expiradas cada X segundos para que la UI las quite sin
+  // esperar a que llegue un doc-change (que no vendrá si la otra sesión
+  // simplemente ha dejado de heartbeatear).
+  firestorePresenceSweepTimer = setInterval(renderFirestorePresenceFromMap, PRESENCE_POLL_MS);
+
+  // Re-solicitar alias con doble-click en el badge (comportamiento original).
+  const el = presenceElement();
+  if (el && !el.dataset.firestoreDblclick) {
+    el.dataset.firestoreDblclick = "1";
+    el.addEventListener("dblclick", async () => {
+      await ensureEditorName({ force: true });
+      heartbeat();
+    });
+  }
+
+  window.addEventListener("beforeunload", () => {
+    try { window.PanelFirebase.deletePresence(PRESENCE_SESSION_ID); } catch (_) { /* ignore */ }
+  });
+}
+
+function startCellLocksListener() {
+  if (!isFirestoreSourceActive()) return;
+  if (cellLocksUnsub) return;
+  if (!window.PanelFirebase?.listenToCellLocks) return;
+  cellLocksUnsub = window.PanelFirebase.listenToCellLocks(
+    handleRemoteCellLockChange,
+    (err) => handleFirestoreListenerError("cell-lock", err)
+  );
+  cellLocksSweepTimer = setInterval(sweepExpiredCellLocks, LOCK_SWEEP_INTERVAL_MS);
+
+  // Best-effort limpieza de nuestros locks al cerrar. Firestore no garantiza
+  // que el request llegue, pero es un intento. El TTL de 30 s cubre el fallo.
+  window.addEventListener("beforeunload", () => {
+    myActiveCellLocks.forEach((state) => {
+      try {
+        window.PanelFirebase.releaseCellLock(state.rowKey, state.columnKey);
+      } catch (_) { /* ignore */ }
+    });
+  });
+}
+
+// (ensureFirebaseAuthForEditor eliminado en Fase 2c — el gate de auth ahora
+//  vive directamente en bootInitialLoad → ensureAuthAndBoot, y sustituye por
+//  completo al gate de Drive.)
+
+// Selector de fuente de datos. La rama dev tiene el flag activado; la rama
+// main lo mantendrá desactivado hasta el cutover final.
+function bootInitialLoad() {
+  const useFirestore = window.PANEL_CONFIG?.USE_FIRESTORE_AS_SOURCE === true;
+
+  if (useFirestore) {
+    // Rama Firestore. Firebase Auth es el gate único de identidad (Fase 2c).
+    // Drive OAuth queda inutilizado; se retirará en 2d cuando eliminemos
+    // gdrive.js del HTML.
+    const startFirestoreData = () => {
+      if (window.PanelFirebase?.db) {
+        loadPanelFromFirestore();
+      } else {
+        document.addEventListener("firebase:ready", () => loadPanelFromFirestore(), { once: true });
+      }
+    };
+
+    // El visor no necesita auth — lectura pública.
+    if (IS_VIEWER_MODE) {
+      startFirestoreData();
+      return;
+    }
+
+    // Editor: arranque de todo lo post-auth (datos + alias + presencia).
+    const startEditorSideEffects = async () => {
+      startFirestoreData();
+      try { await ensureEditorName(); } catch (_) { /* opcional */ }
+      startFirestorePresenceTracking();
+    };
+
+    // Gate de Firebase Auth. Casos:
+    //   a) Ya hay sesión Firebase cacheada → arranque directo.
+    //   b) No hay sesión → popup de Google. Si el usuario firma, arranque.
+    //      Si cancela o falla, dejamos un toast y esperamos a que vuelva a
+    //      cargar la página (hard refresh).
+    const ensureAuthAndBoot = async () => {
+      if (!window.PanelFirebase?.auth) {
+        console.error("[auth] Firebase Auth no está inicializado");
+        return;
+      }
+      const expectedEmail = window.PANEL_CONFIG?.AUTHORIZED_EDITOR_EMAIL;
+      let user = window.PanelFirebase.auth.currentUser;
+      if (!user) {
+        user = await window.PanelFirebase.signInPanelUser();
+      }
+      if (!user) {
+        console.warn("[auth] sesión no obtenida — el editor no arrancará hasta que firmes");
+        showGridToast("Necesitas iniciar sesión para editar el panel");
+        return;
+      }
+      if (expectedEmail && user.email !== expectedEmail) {
+        // El usuario firmó con otra cuenta. Firestore rechazará sus escrituras
+        // por las Rules. Avisamos claramente y arrancamos igualmente en modo
+        // "lectura de facto" (los writes fallarán pero la UI carga).
+        console.warn(`[auth] cuenta ${user.email} no autorizada (se esperaba ${expectedEmail})`);
+        showGridToast(`⚠️ Cuenta incorrecta (${user.email}). Firma con ${expectedEmail}`);
+      }
+      startEditorSideEffects();
+    };
+
+    if (window.PanelFirebase?.auth) {
+      ensureAuthAndBoot();
+    } else {
+      document.addEventListener("firebase:ready", ensureAuthAndBoot, { once: true });
+    }
+    return;
+  }
+
+  // Legacy: carga desde Google Drive (comportamiento previo).
+  if (IS_VIEWER_MODE) {
+    autoLoadFromDrive();
+    return;
+  }
+  if (window.GoogleDrive?.isSignedIn?.()) {
+    autoLoadFromDrive();
+    return;
+  }
+  document.addEventListener("gdrive:signedin", autoLoadFromDrive, { once: true });
+  if (window.GoogleDrive?.showGate) {
+    window.GoogleDrive.showGate();
+  } else {
+    const waitInterval = setInterval(() => {
+      if (window.GoogleDrive?.showGate) {
+        clearInterval(waitInterval);
+        window.GoogleDrive.showGate();
+      }
+    }, 100);
+    setTimeout(() => clearInterval(waitInterval), 10000);
+  }
+}
+
+renderMonthBlockGrid(document.getElementById("app"));
+
+bootInitialLoad();
